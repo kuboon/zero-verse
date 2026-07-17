@@ -8,3 +8,33 @@
 - 配偶者選択 = 子の半分を委ねるアルゴリズム選び。行動履歴から相手の brain の質を推定するので、協力性が配偶市場を通じて伝播する。
 - 最大の抜け穴は**同族内婚**（両親同一 brain なら r = 1）。抑止は二つ：同族を確実に見つけられないこと、内婚に閉じると skill 流入が減り技術が止まること。**外婚は skill を買い、内婚は brain を守る**という戦略軸として残す。人工ペナルティは足さない。
 - **marriage アクションは置かない**。conceive の相互指定のみ。婚姻という制度も brain が発明する。
+
+## WIT：血縁に関わる型と操作
+
+```wit
+variant act {
+  conceive(human-id),   // 相互指定で成立
+  // ...
+}
+
+// acquaintance.relation に入る（→ human.md）
+// world が保証できる関係だけを列挙。それ以外は unknown
+enum relation-hint {
+  self-child,
+  self-parent,
+  spouse,
+  unknown,
+}
+```
+
+関連イベント：`child-born(human-id)`、`someone-died(human-id)`（[human.md](./human.md)）。
+
+継承関連の world パラメータ（[09-wit-draft.md](./09-wit-draft.md) の world-config）：`max-lifespan-months` など。
+
+## 詰めるべき点
+
+- [ ] conceive の成立条件：spouse 状態を挟むか、毎回の相互指定のみか（[90-open-questions.md](./90-open-questions.md) #1。まず相互指定のみで試す → [PLAN.md](../../PLAN.md)）。
+- [ ] `relation-hint` の `spouse` の定義：marriage アクションが無いのに world が spouse を保証できるのか。conceive 成立実績から world が認定するのか、それとも spouse hint 自体を削るのか。**現状の草案は自己矛盾気味であり要決着。**
+- [ ] 妊娠期間と出産コスト：conceive 成立から child-born までの月数、母体の stats / resource への影響。
+- [ ] conceive できる年齢範囲（能力曲線＝ available-actions で表現するか）。
+- [ ] 片親が死んだ場合の baby brain 期間の扱いと、6歳継承の抽選タイミング。

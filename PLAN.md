@@ -27,8 +27,8 @@
 
 ### P0-1. WIT の確定
 
-- `wit/` ディレクトリを作り、[09-wit-draft.md](./docs/design/09-wit-draft.md) の草案を確定版に起こす。
-- 未定義 record を埋める：`board-quote`、`trade-info`、`teach-info`、`proposal`、`stat`、`stat-target`、`action-kind`、`public-trade`。
+- WIT の型定義は [docs/design/](./docs/design/) のトピックごとの md に分散してある（骨格と分散マップは [09-wit-draft.md](./docs/design/09-wit-draft.md)）。各 md 末尾の「詰めるべき点」を潰して仕様を確定し、`wit/` ディレクトリに統合した確定版を起こす。
+- 未定義 record を埋める：`board-quote`、`trade-info`、`teach-info`、`proposal`、`stat`、`stat-target`、`action-kind`、`public-trade`、`give-args`。
 - 型は変えてよいが「**不変の原則**」（純関数 decide / インスタンス新規化 / float 禁止 / snapshot の情報線引き / fuel→food 写像）は変えない。
 - M1 では probe・conceive・teach 系は使わないが、ABI の互換性破壊を避けるため型定義だけは最初から置く。
 

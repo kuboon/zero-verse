@@ -17,8 +17,8 @@
 | パス | 内容 |
 | --- | --- |
 | [PLAN.md](./PLAN.md) | 実装計画（フェーズ分割・マイルストーン・合格基準） |
-| [docs/design/](./docs/design/) | 設計ドキュメント（公理系、resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ） |
-| [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) | brain ⇔ engine 接続仕様（WIT）草案 |
+| [docs/design/](./docs/design/) | 設計ドキュメント（公理系、human / resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ）。WIT の型定義は各トピックの md に分散 |
+| [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) | brain ⇔ engine 接続仕様（WIT）の全体像と分散マップ |
 
 ### 設計の原典
 

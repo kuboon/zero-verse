@@ -24,14 +24,17 @@
 | ファイル | 内容 |
 | --- | --- |
 | [01-axioms.md](./01-axioms.md) | 公理系（9 項）と三つの保存クラス |
-| [02-resources.md](./02-resources.md) | resource の設計（組成保存・自由エネルギー） |
-| [03-skills.md](./03-skills.md) | skill の設計と教育の仕様 |
-| [04-market.md](./04-market.md) | 市場の設計（板・貨幣の創発） |
-| [05-kinship.md](./05-kinship.md) | 血縁と婚姻 |
+| [human.md](./human.md) | human の仕様（ライフサイクル・stats・観測と行動の WIT） |
+| [02-resources.md](./02-resources.md) | resource の設計（組成保存・自由エネルギー・craft の WIT） |
+| [03-skills.md](./03-skills.md) | skill の設計と教育の仕様（teach/learn の WIT） |
+| [04-market.md](./04-market.md) | 市場の設計（板・貨幣の創発・standing order の WIT） |
+| [05-kinship.md](./05-kinship.md) | 血縁と婚姻（conceive・relation-hint の WIT） |
 | [06-communication.md](./06-communication.md) | 通信とシグナリング |
 | [07-scoring.md](./07-scoring.md) | 採点（Shapley 値） |
 | [08-architecture.md](./08-architecture.md) | 実装アーキテクチャと決定論チェックリスト |
-| [09-wit-draft.md](./09-wit-draft.md) | WIT インターフェース草案 |
+| [09-wit-draft.md](./09-wit-draft.md) | WIT パッケージ全体像（型定義の分散マップ・不変の原則） |
 | [10-ideas.md](./10-ideas.md) | 追加アイデア（採用方針） |
 | [90-open-questions.md](./90-open-questions.md) | 未決事項 |
 | [91-rejected.md](./91-rejected.md) | 経緯メモ（破棄した案） |
+
+WIT の型定義は単一ファイルに集約せず、仕様を詰めるトピックごとの md に分散してある。全体の骨格と分散マップは [09-wit-draft.md](./09-wit-draft.md)。各 md 末尾の「詰めるべき点」チェックリストが P0-1（WIT 確定）の作業リストになる。
