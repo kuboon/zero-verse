@@ -16,7 +16,50 @@ human は world に存在する唯一の要素である（[設計原則](./00-ov
 
 - 身体能力は年齢の関数として変化し、実行可能なアクション（`available-actions`）を決める（[公理 3](./01-axioms.md)）。
 - train で上げ、老化で下がる。移転不可・非保存（[保存クラス](./01-axioms.md)）。
-- stat の名前は world 共通（health など）。resource-id と違いシャッフルしない。
+- stat の名前は world 共通。resource-id と違いシャッフルしない。
+
+### stat 一覧
+
+stat は以下の 4 種で固定する。公理系と同じく「これ以上足さない」方針。追加したくなったら、まず既存 stat の閾値・係数で表現できないかを疑う。
+
+| stat | 何を決めるか | 能力曲線 | train |
+| --- | --- | --- | --- |
+| **health**（体力） | 生存そのもの。0 で死。毎月の food 消費で維持し、不足すると低下。出産で一時低下 | 最大値が加齢で単調に低下 | 不可（food で維持する） |
+| **strength**（筋力） | harvest の取り分係数、craft に一月で投入できる総量 | 青年期ピークの山型 | 可 |
+| **cognition**（認知） | learn の進捗速度（教育速度 T の「学習者の若さ」の実体）、craft 実験での発見確率の係数 | 幼少期に高く、老化で緩やかに低下 | 可 |
+| **fertility**（生殖） | conceive の成立可否と成功確率 | 年齢窓（思春期に開き、加齢で閉じる） | 不可 |
+
+- **アクション枠**は `act-slots-base` を health と strength で補正して決める（具体式は M1 で数値決定）。
+- **memory-limit は stat にしない**。年齢の関数のまま（[不変の原則](./09-wit-draft.md) 5）。train で記憶容量を買えると老化制約が骨抜きになる。
+- **知人リスト上限**を cognition の関数にする案がある（[90-open-questions.md](./90-open-questions.md) #2 は未決のまま）。
+- `available-actions` は stats の閾値で決まる（例：fertility が窓内にあるときだけ conceive が現れる。6歳未満はほとんどのアクションが閉じている）。
+
+### WIT
+
+```wit
+enum stat-kind {
+  health,     // 生存。0 で死
+  strength,   // 身体作業の量
+  cognition,  // 学習と発見
+  fertility,  // conceive
+}
+
+record stat {
+  kind: stat-kind,
+  value: qty,      // 0 〜 100.000（qty 刻み）
+}
+
+// train の対象。health / fertility を指定した train は action-failed
+type stat-target = stat-kind;
+```
+
+### apparent-age の算出
+
+知人観測に出る `apparent-age` は実年齢そのものではなく、**実年齢と stats から算出される見かけの年齢**。
+
+- 年齢標準値に対する health・strength の比から活力指数 vitality を作り、`apparent-age = age × (1 + β(1 − vitality))` を**年単位に量子化**して返す。補正係数 β は world パラメータ。
+- 帰結 1：見かけ年齢は stats の**正直なシグナル**になる。若く見せるには train と food の実コストがかかるため、Zahavi 原則（[06-communication.md](./06-communication.md)）と整合する。配偶者選択・教師選択の手がかりはここに乗る。
+- 帰結 2：実年齢は隠れる。出生順の推定が粗くなり、血縁の手がかり漏洩（human-id 非連番と同じ動機）をさらに弱める。
 
 ## アクション枠
 
@@ -37,7 +80,7 @@ human は world に存在する唯一の要素である（[設計原則](./00-ov
 ## 知人（acquaintance）
 
 - 獲得経路は introduce（triadic closure）と、確率 ε の偶発的出会い（[公理 6](./01-axioms.md)）。
-- 知人について観測できるのは `apparent-age`（粗い年齢）、`alive`、`relation-hint`、`last-interaction` のみ。**相手の resource と stats は観測不能**。豊かさすら行動からしか推定できない。
+- 知人について観測できるのは `apparent-age`（実年齢と stats から算出される見かけの年齢。上記）、`alive`、`relation-hint`、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
 - 知人リストの上限は未決（[90-open-questions.md](./90-open-questions.md) #2）。
 
 ## WIT：観測（human が見えるもの）
@@ -57,7 +100,7 @@ interface observation {
   record self-view {
     id: human-id,
     age-months: u32,
-    stats: list<stat>,              // 名前は world 共通（health など）
+    stats: list<stat>,              // stat 一覧は上記 4 種で固定
     resources: list<resource-stack>,
     skills: list<skill-view>,       // → 03-skills.md
     available-actions: list<action-kind>,
@@ -67,7 +110,7 @@ interface observation {
 
   record acquaintance {
     id: human-id,
-    apparent-age: u32,        // 粗い年齢のみ
+    apparent-age: u32,        // 見かけの年齢（年単位。実年齢と stats から算出）
     alive: bool,
     relation: relation-hint,
     last-interaction: option<month>,
@@ -133,10 +176,11 @@ interface action {
 
 ## 詰めるべき点
 
-- [ ] `stat` / `stat-target` の確定：stat の一覧（health / strength / …？）、能力曲線の形、train の効果式。
+- [x] `stat` / `stat-target` の確定：health / strength / cognition / fertility の 4 種で固定（上記）。曲線の具体式・train の効果式・アクション枠の補正式は M1 で数値決定。
+- [x] `apparent-age` の粒度と算出：実年齢と stats（vitality）から算出し年単位に量子化（上記）。補正係数 β の値は M1 で決める。
 - [ ] `action-kind` の確定：available-actions の粒度（act 種別のみか、対象込みか）。
-- [ ] 餓死の有無：food を消費できない月に何が起きるか（stats 低下か即死か）。M1 の消費と生存モデルで確定する。
-- [ ] `apparent-age` の粒度（年単位か、より粗いか）。
+- [ ] 餓死の有無：food を消費できない月に何が起きるか。health の仕様上「food 不足 → health 低下 → 0 で死」の緩衝付き餓死が既定路線。低下速度は M1 の消費と生存モデルで確定する。
+- [ ] 性別を置くか：現状の設計に sex は無い。conceive の非対称コスト（妊娠・出産の health 低下を片方だけが負う）をどう割り当てるか。fertility の曲線を個体差にするか。→ [05-kinship.md](./05-kinship.md)
 - [ ] `proposal` の定義：proposal-received が何を運ぶか（teach / conceive の申し出か。無料シグナルにならない設計にする必要がある → [06-communication.md](./06-communication.md)）。
 - [ ] 知人リストの上限（[90-open-questions.md](./90-open-questions.md) #2。まず定数で入れる方針 → [PLAN.md](../PLAN.md)）。
 - [ ] 出生直後（0歳）の扱い：baby brain の decide は呼ばれるか、親の枠で養育するのか。

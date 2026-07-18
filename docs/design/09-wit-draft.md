@@ -70,7 +70,7 @@ record world-config {
 | `trade-info` / `public-trade` | [04-market.md](./04-market.md) |
 | `teach-info` | [03-skills.md](./03-skills.md) |
 | `proposal` | [06-communication.md](./06-communication.md)（要否から再検討） |
-| `stat` / `stat-target` / `action-kind` | [human.md](./human.md) |
+| `action-kind` | [human.md](./human.md) |
 | `give-args` | [02-resources.md](./02-resources.md)（草案の抜け） |
 
 ## 不変の原則（型を変えても守る）
