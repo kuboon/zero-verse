@@ -90,7 +90,8 @@ human のペアは**親密度**を持つ（[公理 10](./01-axioms.md)）。stat
 
 - decide の WASM fuel 消費は、その human の food 消費に写像される。重い brain は自分の食費で遅さを払う（[10-ideas.md](./10-ideas.md)）。
 - 今月の思考予算 `fuel-budget` は food 残高から算出され、snapshot で渡される。
-- fuel 切れ / trap / 不正 decision は「その月は idle」に潰される（[08-architecture.md](./08-architecture.md)）。
+- **fuel 切れは部分実行**：decide が途中で fuel 切れ（または trap）しても、それまでに commit 済みの宣言は有効に実行される（下記「WIT：行動」）。全損の idle 潰しはしない。
+- 帰結：**思考の順序も戦略になる**。重要な決定を安く先に commit する brain は、fuel 切れに強い。
 
 ## 記憶（memory）
 
@@ -160,15 +161,24 @@ interface observation {
 
 ## WIT：行動（human ができること）
 
+decide は宣言を**戻り値で一括返却しない**。commit import を呼んで宣言を積み上げる。fuel が途中で切れても、**commit 済みの宣言はそのまま有効**。
+
 ```wit
+interface commit {
+  use action.{act, standing-order};
+
+  // 今月の act を積む。呼んだ順に実行を試みる。枠数（stats 依存）の超過分は無効
+  act: func(a: act);
+
+  // standing order を積む（毎月全交換 → 04-market.md）
+  order: func(o: standing-order);
+
+  // memory を保存する。複数回呼ぶと上書き。一度も呼ばなければ先月のまま
+  save-memory: func(data: list<u8>);
+}
+
 interface action {
   use types.{human-id, resource-id, skill-id, qty, resource-stack};
-
-  record decision {
-    acts: list<act>,               // 今月実行（枠数は stats に依存）
-    orders: list<standing-order>,  // 毎月全交換 → 04-market.md
-    memory: list<u8>,
-  }
 
   variant act {
     harvest,                       // Φ を採る → 02-resources.md
@@ -186,7 +196,11 @@ interface action {
 }
 ```
 
-設計判断：**拒否アクションはない**。応じない = 対応する act / order を出さない。
+設計判断：
+
+- **拒否アクションはない**。応じない = 対応する act / order を出さない。
+- **commit は fire-and-forget**。戻り値を持たず、その場での検証結果を返さない（返すと無料の情報になる）。不正な宣言（枠超過、持っていない resource の give 等）は月内解決時に個別に落とされ、翌月の `action-failed` で知る。
+- **act の実行順は commit した順**。月内の自分の行動順序を brain が自分で決められる（他人との相互作用の解決順序は別途固定 → [08-architecture.md](./08-architecture.md)）。
 
 ## 詰めるべき点
 
@@ -201,3 +215,5 @@ interface action {
 - [ ] `proposal` の定義：proposal-received が何を運ぶか（teach / conceive の申し出か。無料シグナルにならない設計にする必要がある → [06-communication.md](./06-communication.md)）。
 - [ ] 知人リストの上限（[90-open-questions.md](./90-open-questions.md) #2。まず定数で入れる方針 → [PLAN.md](../PLAN.md)）。
 - [ ] 出生直後（0歳）の扱い：baby brain の decide は呼ばれるか、親の枠で養育するのか。
+- [ ] commit 自体の fuel コスト：commit 呼び出しに少額の fuel を課すか（大量 commit の spam 防止）。save-memory のコストをサイズ比例にするか。
+- [ ] fuel 切れ時の memory：save-memory 前に fuel が切れると記憶は先月のまま（「考えすぎて記録し損ねる」）。この仕様で良いか、それとも部分書き込みを許すか。

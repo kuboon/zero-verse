@@ -8,7 +8,7 @@
 
 ## WIT：standing order（立て看板）
 
-decide が返す `orders`（[human.md](./human.md) の decision から抜粋）。毎月全交換される宣言であり、月内の相互作用はエンジンが宣言同士を突き合わせて解決する。
+decide が `commit.order` で積む宣言（[human.md](./human.md)）。毎月全交換され、月内の相互作用はエンジンが宣言同士を突き合わせて解決する。
 
 ```wit
 variant standing-order {

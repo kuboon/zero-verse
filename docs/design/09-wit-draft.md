@@ -6,7 +6,7 @@ brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めや
 
 1. **float 禁止**。量はすべて固定小数点（qty = 1/1000 単位の u64）。
 2. ID はすべて不透明な u64。resource-id と skill-id は world 生成時にシャッフル。human-id は連番にしない。
-3. decide は「即時アクション + standing orders（立て看板）」を返す。月内の相互作用はエンジンが宣言同士を突き合わせて解決する。decide の呼び出しは月一回。
+3. decide は月一回呼ばれ、「即時アクション + standing orders（立て看板）」を **commit import で積み上げる**（戻り値は持たない）。fuel が途中で切れても commit 済みの宣言は有効（部分実行）。月内の相互作用はエンジンが宣言同士を突き合わせて解決する。
 
 ## 分散マップ
 
@@ -18,7 +18,7 @@ brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めや
 | `standing-order`、`limit-order`、`cond-give`、`give-condition`、`board-quote` | [04-market.md](./04-market.md) |
 | `conceive`、出産の観測非対称 | [05-kinship.md](./05-kinship.md) |
 | 通信の搬送路（専用型なし）、約束機構、`proposal` の要否 | [06-communication.md](./06-communication.md) |
-| `snapshot`、`self-view`、`stat`、`sex`、`acquaintance`（親密度）、`event`、`decision`、`act` | [human.md](./human.md) |
+| `snapshot`、`self-view`、`stat`、`sex`、`acquaintance`（親密度）、`event`、`commit`、`act` | [human.md](./human.md) |
 
 ## WIT：パッケージ骨格
 
@@ -48,10 +48,11 @@ interface probe {
 
 world brain {
   import probe;
+  import commit;   // act / order / save-memory を積み上げる → human.md
 
   export init: func(config: world-config) -> ();
-  export decide: func(snap: observation.snapshot, memory: list<u8>)
-    -> action.decision;
+  // 戻り値なし。宣言は commit で積む。fuel 切れ時も commit 済みは有効
+  export decide: func(snap: observation.snapshot, memory: list<u8>) -> ();
 }
 
 record world-config {
@@ -75,7 +76,7 @@ record world-config {
 
 ## 不変の原則（型を変えても守る）
 
-1. decide はステートレスな純関数。状態は memory blob 経由のみ。
+1. decide はステートレス。月を跨いで持ち越せる状態は memory blob 経由のみ（インスタンスは毎回破棄）。出力は commit import への積み上げで、fuel 切れでも commit 済みは有効。
 2. 呼び出しごとに WASM インスタンスを新規化する。共有はテレパシーになる。
 3. ABI に float を入れない。wasi をリンクしない。乱数はエンジンが決定論的シードとして渡す。
 4. snapshot に入れた情報は無料の全知になる。「自分の内側は全部見える、他人は行動の痕跡だけ」の線を守る。
