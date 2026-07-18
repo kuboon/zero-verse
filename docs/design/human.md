@@ -6,7 +6,7 @@ human は world に存在する唯一の要素である（[設計原則](./00-ov
 
 ## ライフサイクル
 
-1. **出生**：conceive の相互指定が成立すると誕生する（[05-kinship.md](./05-kinship.md)）。
+1. **出生**：conceive の相互指定が成立すると誕生する（[05-kinship.md](./05-kinship.md)）。誕生時に sex が 1/2 で決まる（下記）。
 2. **0〜6歳**：world 提供の共通 baby brain で動く。
 3. **6歳**：父母どちらかの brain を 50% ずつの確率で引き継ぐ。切替は観測不能。
 4. **老化**：stats が低下し、memory 上限が減る（物忘れ）。
@@ -61,6 +61,26 @@ type stat-target = stat-kind;
 - 帰結 1：見かけ年齢は stats の**正直なシグナル**になる。若く見せるには train と food の実コストがかかるため、Zahavi 原則（[06-communication.md](./06-communication.md)）と整合する。配偶者選択・教師選択の手がかりはここに乗る。
 - 帰結 2：実年齢は隠れる。出生順の推定が粗くなり、血縁の手がかり漏洩（human-id 非連番と同じ動機）をさらに弱める。
 
+## 性別（sex）
+
+- sex は誕生時に 1/2 の確率で決まる（female / male）。**本人以外には不可視**。self-view にだけ入り、acquaintance には出ない。
+- conceive は異性ペアでのみ成立する。不成立でも理由は返さない（action-failed の一般則）ので、相手の sex は conceive の試行からも確率的にしか判らない（fertility 窓外・相互指定不成立との区別がつかない）。
+- 妊娠・出産のコスト（health の一時低下）は女性が負う。
+- **出産の観測は非対称**：女性は `child-born` イベントで自分の子を確実に知る。男性には何も通知されず、**0歳の知人が 1 人増えるだけ**。父性の確実な証明は world のどこにも存在しない（[05-kinship.md](./05-kinship.md)）。
+
+```wit
+enum sex { female, male }   // self-view にのみ含まれる
+```
+
+## 親密度（intimacy）
+
+human のペアは**親密度**を持つ（[公理 10](./01-axioms.md)）。stats の対人版であり、state クラス（非保存・移転不可）に属する。
+
+- **可視性**：当事者二人だけに見え、**両者から同じ値が見える**。第三者間の親密度は観測できない。つまり配偶者は「相手が他の誰かとどれだけ親密か」を直接見ることはできない。
+- **増減**：毎月、両者の stats に応じた自然増減が起きる。加えて、当事者間で action のやり取り（give / teach / learn / 板での約定 / introduce / conceive など）があるたびに増減する。具体式は未決（[90-open-questions.md](./90-open-questions.md) #6）。
+- **初期値**：出生時、母子ペアには高い初期値が与えられる。それ以外のペアは 0 から始まる。relation-hint の廃止後、親子の認識はこの初期値と養育の履歴に一本化される。
+- 婚姻契約「他の人と一定以上親密にならない」の判定基盤になる（[06-communication.md](./06-communication.md) の約束機構）。
+
 ## アクション枠
 
 - 毎月の decide で `acts` を返し、枠数まで実行される。枠数は stats に依存する（基準値は `world-config.act-slots-base`）。
@@ -80,7 +100,8 @@ type stat-target = stat-kind;
 ## 知人（acquaintance）
 
 - 獲得経路は introduce（triadic closure）と、確率 ε の偶発的出会い（[公理 6](./01-axioms.md)）。
-- 知人について観測できるのは `apparent-age`（実年齢と stats から算出される見かけの年齢。上記）、`alive`、`relation-hint`、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
+- 知人について観測できるのは `apparent-age`（実年齢と stats から算出される見かけの年齢。上記）、`alive`、`intimacy`（親密度。上記）、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
+- relation-hint（world による関係の保証）は**廃止した**。world が human 間の関係を証明する仕組みは存在しない（[05-kinship.md](./05-kinship.md)）。
 - 知人リストの上限は未決（[90-open-questions.md](./90-open-questions.md) #2）。
 
 ## WIT：観測（human が見えるもの）
@@ -100,6 +121,7 @@ interface observation {
   record self-view {
     id: human-id,
     age-months: u32,
+    sex: sex,                       // 本人以外には不可視
     stats: list<stat>,              // stat 一覧は上記 4 種で固定
     resources: list<resource-stack>,
     skills: list<skill-view>,       // → 03-skills.md
@@ -112,16 +134,8 @@ interface observation {
     id: human-id,
     apparent-age: u32,        // 見かけの年齢（年単位。実年齢と stats から算出）
     alive: bool,
-    relation: relation-hint,
+    intimacy: qty,            // 親密度。両者から同じ値が見える
     last-interaction: option<month>,
-  }
-
-  // world が保証できる関係だけを列挙。それ以外は unknown
-  enum relation-hint {
-    self-child,
-    self-parent,
-    spouse,
-    unknown,
   }
 
   variant event {
@@ -131,7 +145,7 @@ interface observation {
     skill-acquired(skill-id),
     introduced(introduction-info),
     encountered(human-id),          // ε 由来の偶発的出会い
-    child-born(human-id),           // → 05-kinship.md
+    child-born(human-id),           // 出産。母にのみ届く → 05-kinship.md
     someone-died(human-id),         // 知人の死のみ通知
     proposal-received(proposal),
     action-failed(action-kind),     // 失敗理由は返さない
@@ -180,7 +194,10 @@ interface action {
 - [x] `apparent-age` の粒度と算出：実年齢と stats（vitality）から算出し年単位に量子化（上記）。補正係数 β の値は M1 で決める。
 - [ ] `action-kind` の確定：available-actions の粒度（act 種別のみか、対象込みか）。
 - [ ] 餓死の有無：food を消費できない月に何が起きるか。health の仕様上「food 不足 → health 低下 → 0 で死」の緩衝付き餓死が既定路線。低下速度は M1 の消費と生存モデルで確定する。
-- [ ] 性別を置くか：現状の設計に sex は無い。conceive の非対称コスト（妊娠・出産の health 低下を片方だけが負う）をどう割り当てるか。fertility の曲線を個体差にするか。→ [05-kinship.md](./05-kinship.md)
+- [x] 性別：出生時に 1/2 で決定、本人のみ可視（上記）。妊娠・出産の health 低下は女性が負う。fertility 曲線の男女差を入れるかは M4 で決める。
+- [ ] 親密度の増減式：stats 依存の月次項と、action 種別ごとの増減量（[90-open-questions.md](./90-open-questions.md) #6）。
+- [ ] 母子の初期親密度の値と、養育（give 給餌）による増分のバランス。
+- [ ] 知人リストと親密度の関係：親密度 0 になった知人をリストから落とすか（忘却）。上限問題（#2）と一緒に決める。
 - [ ] `proposal` の定義：proposal-received が何を運ぶか（teach / conceive の申し出か。無料シグナルにならない設計にする必要がある → [06-communication.md](./06-communication.md)）。
 - [ ] 知人リストの上限（[90-open-questions.md](./90-open-questions.md) #2。まず定数で入れる方針 → [PLAN.md](../PLAN.md)）。
 - [ ] 出生直後（0歳）の扱い：baby brain の decide は呼ばれるか、親の枠で養育するのか。

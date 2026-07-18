@@ -20,11 +20,11 @@
 | --- | --- |
 | [概要とコンセプト](./design/00-overview.md) | 設計原則とドキュメント構成 |
 | [公理系](./design/01-axioms.md) | 9 項の公理と三つの保存クラス |
-| [human の仕様](./design/human.md) | ライフサイクル・stats・観測と行動の WIT |
+| [human の仕様](./design/human.md) | ライフサイクル・stats・sex・親密度・観測と行動の WIT |
 | [resource の設計](./design/02-resources.md) | 組成保存・自由エネルギー・craft の WIT |
 | [skill の設計](./design/03-skills.md) | 教育の仕様・teach/learn の WIT |
 | [市場の設計](./design/04-market.md) | 板・貨幣の創発・standing order の WIT |
-| [血縁と婚姻](./design/05-kinship.md) | 50/50 継承・conceive・relation-hint の WIT |
+| [血縁と婚姻](./design/05-kinship.md) | 50/50 継承・conceive・出産の観測非対称 |
 | [通信とシグナリング](./design/06-communication.md) | 実コスト通信の原則 |
 | [採点](./design/07-scoring.md) | Shapley 値と凹効用 |
 | [実装アーキテクチャ](./design/08-architecture.md) | 決定論チェックリスト・三形態デプロイ |

@@ -34,6 +34,7 @@ variant give-condition {
   if-received(resource-stack),   // 相対交換（OTC）
   if-taught-me(skill-id),        // 徒弟制の分割払い → 03-skills.md
   unconditional-scheduled,
+  // 検討中：if-intimacy（担保型の約束）→ 06-communication.md、未決 #7
 }
 ```
 

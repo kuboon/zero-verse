@@ -16,9 +16,9 @@ brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めや
 | `types`（resource-id, qty, resource-stack）、`craft-args`、harvest / give | [02-resources.md](./02-resources.md) |
 | `types`（skill-id）、`skill-view`、`teach-args` / `learn-args` | [03-skills.md](./03-skills.md) |
 | `standing-order`、`limit-order`、`cond-give`、`give-condition`、`board-quote` | [04-market.md](./04-market.md) |
-| `conceive`、`relation-hint` | [05-kinship.md](./05-kinship.md) |
-| 通信の搬送路（専用型なし）、`proposal` の要否 | [06-communication.md](./06-communication.md) |
-| `snapshot`、`self-view`、`acquaintance`、`event`、`decision`、`act` | [human.md](./human.md) |
+| `conceive`、出産の観測非対称 | [05-kinship.md](./05-kinship.md) |
+| 通信の搬送路（専用型なし）、約束機構、`proposal` の要否 | [06-communication.md](./06-communication.md) |
+| `snapshot`、`self-view`、`stat`、`sex`、`acquaintance`（親密度）、`event`、`decision`、`act` | [human.md](./human.md) |
 
 ## WIT：パッケージ骨格
 
