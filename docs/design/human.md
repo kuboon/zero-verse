@@ -138,5 +138,5 @@ interface action {
 - [ ] 餓死の有無：food を消費できない月に何が起きるか（stats 低下か即死か）。M1 の消費と生存モデルで確定する。
 - [ ] `apparent-age` の粒度（年単位か、より粗いか）。
 - [ ] `proposal` の定義：proposal-received が何を運ぶか（teach / conceive の申し出か。無料シグナルにならない設計にする必要がある → [06-communication.md](./06-communication.md)）。
-- [ ] 知人リストの上限（[90-open-questions.md](./90-open-questions.md) #2。まず定数で入れる方針 → [PLAN.md](../../PLAN.md)）。
+- [ ] 知人リストの上限（[90-open-questions.md](./90-open-questions.md) #2。まず定数で入れる方針 → [PLAN.md](../PLAN.md)）。
 - [ ] 出生直後（0歳）の扱い：baby brain の decide は呼ばれるか、親の枠で養育するのか。

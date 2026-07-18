@@ -14,9 +14,11 @@
 
 ## ドキュメント
 
+`docs/` は GitHub Pages として公開する（入口は [docs/index.md](./docs/index.md)）。
+
 | パス | 内容 |
 | --- | --- |
-| [PLAN.md](./PLAN.md) | 実装計画（フェーズ分割・マイルストーン・合格基準） |
+| [docs/PLAN.md](./docs/PLAN.md) | 実装計画（フェーズ分割・マイルストーン・合格基準） |
 | [docs/design/](./docs/design/) | 設計ドキュメント（公理系、human / resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ）。WIT の型定義は各トピックの md に分散 |
 | [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) | brain ⇔ engine 接続仕様（WIT）の全体像と分散マップ |
 
@@ -31,4 +33,4 @@
 
 ## ステータス
 
-**計画フェーズ。実装は未着手。** 実装は [PLAN.md](./PLAN.md) のフェーズ 0 から始める。
+**計画フェーズ。実装は未着手。** 実装は [docs/PLAN.md](./docs/PLAN.md) のフェーズ 0 から始める。

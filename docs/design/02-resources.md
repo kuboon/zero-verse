@@ -57,5 +57,5 @@ record craft-args {
 - [ ] `give-args` の定義（草案で未定義。おそらく `{ to: human-id, stack: resource-stack }`）。
 - [ ] craft 失敗時に失う「材料の一部」の割合（固定か、法則グラフとの距離に依存か）。
 - [ ] 自分の resource の g（自由エネルギー残量）は self-view から見えるか。見えないなら減衰は在庫量の目減りとしてだけ現れるのか。
-- [ ] 組成ベクトルの次元数と、レシピの手続き的生成則（M1 で resource 5 種から始める → [PLAN.md](../../PLAN.md)）。
+- [ ] 組成ベクトルの次元数と、レシピの手続き的生成則（M1 で resource 5 種から始める → [PLAN.md](../PLAN.md)）。
 - [ ] qty の刻み 1/1000 の妥当性（[90-open-questions.md](./90-open-questions.md) #3。ABI に直結するため P0 で確定）。

@@ -33,7 +33,7 @@ enum relation-hint {
 
 ## 詰めるべき点
 
-- [ ] conceive の成立条件：spouse 状態を挟むか、毎回の相互指定のみか（[90-open-questions.md](./90-open-questions.md) #1。まず相互指定のみで試す → [PLAN.md](../../PLAN.md)）。
+- [ ] conceive の成立条件：spouse 状態を挟むか、毎回の相互指定のみか（[90-open-questions.md](./90-open-questions.md) #1。まず相互指定のみで試す → [PLAN.md](../PLAN.md)）。
 - [ ] `relation-hint` の `spouse` の定義：marriage アクションが無いのに world が spouse を保証できるのか。conceive 成立実績から world が認定するのか、それとも spouse hint 自体を削るのか。**現状の草案は自己矛盾気味であり要決着。**
 - [ ] 妊娠期間と出産コスト：conceive 成立から child-born までの月数、母体の stats / resource への影響。
 - [ ] conceive できる年齢範囲（能力曲線＝ available-actions で表現するか）。

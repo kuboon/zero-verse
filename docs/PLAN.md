@@ -1,6 +1,6 @@
 # zeroverse 実装計画
 
-設計の全体像は [docs/design/](./docs/design/) を参照。本書は設計をコードに落とすための作業計画である。
+設計の全体像は [設計ドキュメント](./design/00-overview.md) を参照。本書は設計をコードに落とすための作業計画である。
 
 ## 基本方針
 
@@ -27,7 +27,7 @@
 
 ### P0-1. WIT の確定
 
-- WIT の型定義は [docs/design/](./docs/design/) のトピックごとの md に分散してある（骨格と分散マップは [09-wit-draft.md](./docs/design/09-wit-draft.md)）。各 md 末尾の「詰めるべき点」を潰して仕様を確定し、`wit/` ディレクトリに統合した確定版を起こす。
+- WIT の型定義は[設計ドキュメント](./design/00-overview.md)のトピックごとの md に分散してある（骨格と分散マップは [09-wit-draft.md](./design/09-wit-draft.md)）。各 md 末尾の「詰めるべき点」を潰して仕様を確定し、`wit/` ディレクトリに統合した確定版を起こす。
 - 未定義 record を埋める：`board-quote`、`trade-info`、`teach-info`、`proposal`、`stat`、`stat-target`、`action-kind`、`public-trade`、`give-args`。
 - 型は変えてよいが「**不変の原則**」（純関数 decide / インスタンス新規化 / float 禁止 / snapshot の情報線引き / fuel→food 写像）は変えない。
 - M1 では probe・conceive・teach 系は使わないが、ABI の互換性破壊を避けるため型定義だけは最初から置く。
@@ -36,7 +36,7 @@
 
 - 単一クレート（`core`）。tick ループ、決定論的順序の `resolve()`。
 - wasmtime 統合：**InstancePre + pooling allocator + fuel 計量 + NaN 正規化**。呼び出しごとに新規インスタンス化（Module 共有は可）。
-- 決定論チェックリスト（[08-architecture.md](./docs/design/08-architecture.md)）を実装で担保：
+- 決定論チェックリスト（[08-architecture.md](./design/08-architecture.md)）を実装で担保：
   - ABI から float 排除（qty = 1/1000 固定小数点 u64）
   - wasi を一切リンクしない
   - 乱数は human ID × tick のハッシュを snapshot で渡す
@@ -138,13 +138,13 @@
 - **三形態デプロイ**：ネイティブ / Durable Objects（スローモー人間参加 realm）/ ブラウザ WASM（観戦・デバッグ）。
 - **観戦 UI**：リプレイ（シード配布）、家系図、技術伝播、板の価格チャート。
 - **常設リーグ**と brain 投稿パイプライン（LLM に brain を書かせる公式パイプライン、WIT をプロンプトとして使う）。
-- **追加アイデア**（[10-ideas.md](./docs/design/10-ideas.md)）：「文字」特異ノードはこの段階以降で法則グラフに追加する。
+- **追加アイデア**（[10-ideas.md](./design/10-ideas.md)）：「文字」特異ノードはこの段階以降で法則グラフに追加する。
 
 ---
 
 ## 未決事項の決定タイミング
 
-[90-open-questions.md](./docs/design/90-open-questions.md) の各項をいつまでに決めるか。
+[90-open-questions.md](./design/90-open-questions.md) の各項をいつまでに決めるか。
 
 | # | 論点 | 決定期限 | 備考 |
 | --- | --- | --- | --- |
