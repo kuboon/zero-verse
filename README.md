@@ -22,14 +22,7 @@
 | [docs/design/](./docs/design/) | 設計ドキュメント（公理系、human / resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ）。WIT の型定義は各トピックの md に分散 |
 | [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) | brain ⇔ engine 接続仕様（WIT）の全体像と分散マップ |
 
-### 設計の原典
-
-本リポジトリの設計ドキュメントは、claude.ai 上の設計セッション（2026-07）の引き継ぎ資料を展開したもの。原典は以下。
-
-- [zeroverse 設計引き継ぎ](https://ol.kbn.one/doc/zeroverse-OJAc78Uo1G)
-- [WIT インターフェース草案](https://ol.kbn.one/doc/wit-8Iy8e00jzV)
-
-今後はこのリポジトリの `docs/design/` を source of truth とし、設計変更はここに反映する。
+設計ドキュメントは `docs/` を source of truth とし、設計変更はここに反映する。
 
 ## ステータス
 

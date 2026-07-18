@@ -35,13 +35,6 @@
 
 WIT の型定義は単一ファイルに集約せず、仕様を詰めるトピックごとのページに分散してある。各ページ末尾の「詰めるべき点」チェックリストが P0-1（WIT 確定）の作業リストになる。
 
-## 原典
-
-claude.ai 上の設計セッション（2026-07）の引き継ぎ資料を展開したもの。今後はこのサイト（リポジトリの `docs/`）を source of truth とする。
-
-- [zeroverse 設計引き継ぎ](https://ol.kbn.one/doc/zeroverse-OJAc78Uo1G)
-- [WIT インターフェース草案](https://ol.kbn.one/doc/wit-8Iy8e00jzV)
-
 ## リポジトリ
 
 - [kuboon/zero-verse](https://github.com/kuboon/zero-verse)

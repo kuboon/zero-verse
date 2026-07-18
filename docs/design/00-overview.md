@@ -1,7 +1,5 @@
 # 概要とコンセプト
 
-> 原典：[zeroverse 設計引き継ぎ](https://ol.kbn.one/doc/zeroverse-OJAc78Uo1G)（claude.ai 設計セッション 2026-07）
-
 ## コンセプト
 
 **zeroverse** は、ゼロ次元のメタバース内で human 社会をシミュレートする対戦ゲームである。
