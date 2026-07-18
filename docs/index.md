@@ -21,6 +21,7 @@
 | [概要とコンセプト](./design/00-overview.md) | 設計原則とドキュメント構成 |
 | [公理系](./design/01-axioms.md) | 9 項の公理と三つの保存クラス |
 | [human の仕様](./design/human.md) | ライフサイクル・stats・sex・親密度・観測と行動の WIT |
+| [world の仕様](./design/world.md) | 生成パイプライン・時代プリセット・キャンペーンモード |
 | [resource の設計](./design/02-resources.md) | 組成保存・自由エネルギー・craft の WIT |
 | [skill の設計](./design/03-skills.md) | 教育の仕様・teach/learn の WIT |
 | [市場の設計](./design/04-market.md) | 板・貨幣の創発・standing order の WIT |

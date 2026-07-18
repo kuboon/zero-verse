@@ -10,3 +10,4 @@
 6. **親密度の増減式**：stats 依存の月次項の形と、action 種別ごとの増減量（[human.md](./human.md)）。
 7. **if-intimacy（担保型の約束）を give-condition に足すか**：world に契約執行を半歩入れることになる。escrow を置かない方針との整合（[06-communication.md](./06-communication.md)）。
 8. **時代プリセットの構成**：「概念を知っている」の実装形式（初期 memory 接種のフォーマット、brain 側の互換性）（[10-ideas.md](./10-ideas.md)）。
+9. **キャンペーンのクリア判定**：単一シードか複数シードでの成功率か。シード既知の過学習（歴史の暗記）をどう無効化するか（[world.md](./world.md)）。
