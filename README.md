@@ -26,4 +26,15 @@
 
 ## ステータス
 
-**計画フェーズ。実装は未着手。** 実装は [docs/PLAN.md](./docs/PLAN.md) のフェーズ 0 から始める。
+**計画フェーズ。実装は未着手。** 実装は [docs/PLAN.md](./docs/PLAN.md) のフェーズ 0（P0）から始め、M1（交易は自給自足に勝つか）を最初の反証可能な目標とする。
+
+### 実装セッションの読み順
+
+1. [docs/design/00-overview.md](./docs/design/00-overview.md) — 設計原則と全体像
+2. [docs/design/01-axioms.md](./docs/design/01-axioms.md) — 公理系（11 項）。これが仕様の憲法
+3. [docs/design/human.md](./docs/design/human.md) / [world.md](./docs/design/world.md) — 二大エンティティ
+4. [docs/design/02-resources.md](./docs/design/02-resources.md) / [03-skills.md](./docs/design/03-skills.md) — M1 の中核メカニクス
+5. [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) — WIT の骨格・分散マップ・不変の原則
+6. [docs/PLAN.md](./docs/PLAN.md) — P0 の作業項目と M1 の合格基準
+
+各設計 md 末尾の「詰めるべき点」チェックリストと [90-open-questions.md](./docs/design/90-open-questions.md) が未決の全リスト。**M1 期限の未決（#2, #11〜#15）は P0-1 の WIT 確定時に仮決めしてよい**（決定は 90 と該当 md に反映すること）。

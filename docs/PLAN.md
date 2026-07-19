@@ -68,7 +68,7 @@
 - 交換：板はまだ無し。**give の相対交換のみ**（conditional-give の if-received までを M1 に入れるかは実装時に判断。入れないなら二者の give 相互発行で代替）。
 - 消費と生存：health の自然減少と食事 skill による回復、fuel→health 写像（思考コスト）、初回 decide の食事ブートストラップ（baby brain 期の食事履歴を events で渡す）。
 - 参照 brain 2 種：**自給自足 brain** と **交易 brain**（手書き。以後の全マイルストーンの回帰テストにもなる）。
-- 計測基盤：生涯消費のロギングと集計 CLI。
+- 計測基盤：生涯消費のロギングと集計 CLI。**生涯消費の定義は「食事など stats 獲得 invoke の Δg（入力 g − 産出 g）の生涯総和」を仮採用**（[07-scoring.md](./design/07-scoring.md)）。world 全体の組成保存・空間保存のアサーションもここに含める。
 
 ### 合格基準（反証可能）
 

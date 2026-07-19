@@ -59,6 +59,8 @@ record world-config {
   months-per-year: u32,     // 12
   max-lifespan-months: u32,
   act-slots-base: u32,
+  // 総空間 S や占有維持費 κ など「brain が知ってよい world パラメータ」は
+  // ここに追加していく（world.md の生成パイプライン 3 段目参照）。
   // 法則グラフに関する情報は一切含まれない
 }
 ```
