@@ -21,7 +21,7 @@
 
 | ファイル | 内容 |
 | --- | --- |
-| [01-axioms.md](./01-axioms.md) | 公理系（10 項）と三つの保存クラス |
+| [01-axioms.md](./01-axioms.md) | 公理系（11 項）と三つの保存クラス |
 | [human.md](./human.md) | human の仕様（ライフサイクル・stats・sex・親密度・観測と行動の WIT） |
 | [world.md](./world.md) | world の生成パイプラインとキャンペーンモード |
 | [02-resources.md](./02-resources.md) | resource の設計（組成保存・自由エネルギー・invoke の WIT） |

@@ -13,7 +13,7 @@ brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めや
 | WIT 要素 | 定義場所 |
 | --- | --- |
 | `types`（human-id, month）、`world brain`、`world-config`、`probe` | 本書（下記） |
-| `types`（resource-id, qty, resource-stack）、`invoke-args`、harvest / give | [02-resources.md](./02-resources.md) |
+| `types`（resource-id, qty, resource-stack）、`invoke-args`、harvest / give / discard | [02-resources.md](./02-resources.md) |
 | `types`（skill-id）、`skill-view`、`teach-args` / `learn-args` | [03-skills.md](./03-skills.md) |
 | `standing-order`、`limit-order`、`cond-give`、`give-condition`、`board-quote` | [04-market.md](./04-market.md) |
 | `conceive`、出産の観測非対称 | [05-kinship.md](./05-kinship.md) |
