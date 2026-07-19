@@ -7,6 +7,11 @@ on:
 
 jobs:
   pages:
+    permissions:
+      contents: read
+      pages: write
+      pull-requests: write
+      id-token: write
     uses: kuboon/workflows/.github/workflows/github-page-with-preview.yaml@main
     with:
       # Equivalent to actions/jekyll-build-pages@v1 (that action only exposes a
