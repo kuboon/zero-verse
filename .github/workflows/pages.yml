@@ -1,0 +1,18 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pages:
+    uses: kuboon/workflows/.github/workflows/github-page-with-preview.yaml@main
+    with:
+      # Equivalent to actions/jekyll-build-pages@v1 (that action only exposes a
+      # `uses:` step, but the reusable workflow only invokes build-command as a
+      # shell command), pointed at docs/ with BASE_URL wired into --baseurl.
+      build-command: |
+        bundle install
+        baseurl="$(printf '%s' "$BASE_URL" | sed -E 's#^https?://[^/]+##')"
+        bundle exec jekyll build --source docs --destination dist --baseurl "$baseurl"
