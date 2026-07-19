@@ -62,7 +62,8 @@
 - world 生成：resource 5 種、組成ベクトル + 自由エネルギー g、レシピ（skill）と食事ペアの手続き的生成、resource-id / skill-id シャッフル。
 - 公理の最小実装：tick（月）、寿命、能力曲線（stats）、環境循環（環境ストック、harvest のストック依存歩留まり、消費・死亡時の環境還元、環境変換と Φ 上限）、g の自然減衰、Σg_out < Σg_in の強制、**world 全体（human + 環境）での組成保存アサーション**。
 - アクション：invoke（skill の発動。harvest・食事・train を包含。実験を兼ね、失敗時は材料の一部を失い理由なしの action-failed）/ give / discard / idle。skill の**獲得**（teach/learn・実験発見）は M3 なので、M1 は生得 skill のみで回す。
-- 空間：総空間 S、身体 + 保有体積の占有、満杯時の保有増加制限、食事の廃棄物と discard の動機付け。
+- 空間：総空間 S、身体 + 保有体積の占有、満杯時の保有増加制限、占有維持費 κ（health コスト）、食事・劣化の廃棄物と discard の動機付け。
+- 劣化：resource 型ごとの自発変換（g 減衰の実装）、決定論的確率丸め、環境変換との適用パス統一。
 - 知人：ε による偶発的出会い、introduce（triadic closure）。
 - 交換：板はまだ無し。**give の相対交換のみ**（conditional-give の if-received までを M1 に入れるかは実装時に判断。入れないなら二者の give 相互発行で代替）。
 - 消費と生存：health の自然減少と食事 skill による回復、fuel→health 写像（思考コスト）、初回 decide の食事ブートストラップ（baby brain 期の食事履歴を events で渡す）。

@@ -22,6 +22,7 @@
 - NaN 正規化有効。
 - fuel 計量は wasmtime の決定論的な命令数ベース計量（`Config::consume_fuel(true)` / `Store::set_fuel` / `get_fuel`）。実行後の残量から消費を算出して health の減少に写像する。epoch interruption は実時間ベースで非決定論的なため使用禁止。
 - fuel 切れ / trap は**部分実行**：それまでに commit 済みの宣言は有効に実行する（[human.md](./human.md)）。不正な宣言は月内解決時に個別に落とし、翌月 action-failed で通知する。
+- 劣化・環境変換の固定小数点端数は**決定論的確率丸め**（hash(seed, holder, resource, tick) で丸め方向を決める）。floor 一律だと少量在庫が永遠に腐らない。代替案は holder × resource ごとの誤差累積（Bresenham 方式）。自発変換の適用は tick パイプラインの固定位相（snapshot 生成前）で全ストック一括。
 
 ## その他の設計判断
 

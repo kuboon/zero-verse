@@ -16,4 +16,4 @@
 12. **生得 skill**：baby brain 期に食事 skill の獲得をどう保証するか（[03-skills.md](./03-skills.md)）。
 13. **環境ストックの観測**：harvest 歩留まりからの推定のみか、観測系 skill を置くか（[world.md](./world.md)）。
 14. **死亡時の保有 resource**：全額環境還元とする提案の確定（相続は生前贈与で創発させる）（[world.md](./world.md)）。
-15. **空間モデルの詳細**：体積 v の可視性、空間満杯時の harvest / 受領 / invoke 産出の挙動、身体体積の年齢関数、`space-free`（世界の空き）を snapshot で公開してよいか（[human.md](./human.md)、[world.md](./world.md)）。
+15. **空間モデルの詳細**：体積 v の可視性、空間満杯時の harvest / 受領 / invoke 産出の挙動、身体体積の年齢関数、占有維持費 κ の形（定数か混雑比例か）、`space-free`（世界の空き）を snapshot で公開してよいか（[human.md](./human.md)、[world.md](./world.md)）。
