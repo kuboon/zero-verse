@@ -28,8 +28,8 @@
 ### P0-1. WIT の確定
 
 - WIT の型定義は[設計ドキュメント](./design/00-overview.md)のトピックごとの md に分散してある（骨格と分散マップは [09-wit-draft.md](./design/09-wit-draft.md)）。各 md 末尾の「詰めるべき点」を潰して仕様を確定し、`wit/` ディレクトリに統合した確定版を起こす。
-- 未定義 record を埋める：`board-quote`、`trade-info`、`teach-info`、`proposal`、`stat`、`stat-target`、`action-kind`、`public-trade`、`give-args`。
-- 型は変えてよいが「**不変の原則**」（純関数 decide / インスタンス新規化 / float 禁止 / snapshot の情報線引き / fuel→food 写像）は変えない。
+- 未定義 record を埋める：`board-quote`、`trade-info`、`teach-info`、`proposal`、`stat`、`action-kind`、`public-trade`、`give-args`。
+- 型は変えてよいが「**不変の原則**」（純関数 decide / インスタンス新規化 / float 禁止 / snapshot の情報線引き / fuel→health 写像）は変えない。
 - M1 では probe・conceive・teach 系は使わないが、ABI の互換性破壊を避けるため型定義だけは最初から置く。
 
 ### P0-2. Rust エンジンのスケルトン
@@ -59,12 +59,12 @@
 
 ### 実装項目
 
-- world 生成：resource 5 種、組成ベクトル + 自由エネルギー g、レシピの手続き的生成、resource-id シャッフル。
-- 公理の最小実装：tick（月）、寿命、能力曲線（stats）、Φ の harvest（採取人数割り）、g の自然減衰、組成保存と Σg_out < Σg_in の強制。
-- アクション：harvest / craft（実験を兼ねる。失敗時は材料の一部を失い理由なしの action-failed）/ give / idle。
+- world 生成：resource 5 種、組成ベクトル + 自由エネルギー g、レシピ（skill）と食事ペアの手続き的生成、resource-id / skill-id シャッフル。
+- 公理の最小実装：tick（月）、寿命、能力曲線（stats）、Φ の採取（harvest 系 skill・採取人数割り）、g の自然減衰、組成保存と Σg_out < Σg_in の強制。
+- アクション：invoke（skill の発動。harvest・食事・train を包含。実験を兼ね、失敗時は材料の一部を失い理由なしの action-failed）/ give / idle。skill の**獲得**（teach/learn・実験発見）は M3 なので、M1 は生得 skill のみで回す。
 - 知人：ε による偶発的出会い、introduce（triadic closure）。
 - 交換：板はまだ無し。**give の相対交換のみ**（conditional-give の if-received までを M1 に入れるかは実装時に判断。入れないなら二者の give 相互発行で代替）。
-- 消費と生存：food 消費、fuel→food 写像（思考コスト）。
+- 消費と生存：health の自然減少と食事 skill による回復、fuel→health 写像（思考コスト）、初回 decide の食事ブートストラップ（baby brain 期の食事履歴を events で渡す）。
 - 参照 brain 2 種：**自給自足 brain** と **交易 brain**（手書き。以後の全マイルストーンの回帰テストにもなる）。
 - 計測基盤：生涯消費のロギングと集計 CLI。
 
@@ -74,7 +74,7 @@
 
 ### 主要リスク
 
-- パラメータ空間が広い。g 減衰率・craft 歩留まり・ε・消費量のスイープを自動化する（大規模ランの前哨戦でもある）。
+- パラメータ空間が広い。g 減衰率・invoke 歩留まり・ε・消費量のスイープを自動化する（大規模ランの前哨戦でもある）。
 - 手続き的レシピ生成が「浅すぎる/深すぎる」化学を作る。resource 5 種で交易の余地（比較優位）が出る生成則を先に確認する。
 
 ---
@@ -101,7 +101,7 @@
 
 ### 実装項目
 
-- skill：法則グラフのノードとしての skill、前提 skill 付きの実験的発見（確率的）、craft の using-skills 判定。
+- skill：法則グラフのノードとしての skill、前提 skill 付きの実験的発見（確率的）、invoke の using-skills 判定。
 - teach/learn：同月ペア成立で 1ヶ月進捗、完了まで T ヶ月（教師の熟練度と学習者の若さの関数）、両者のアクション枠消費。
 - if-taught-me（standing order）：月単位アトミックな分割払い。エスクローは置かない（escrow on/off の実験パラメータ化は未決事項 5）。
 - skill 漏洩の二経路：産出 resource の市場観測、教えた事実。リバースエンジニアリング（観測からの確率的逆算）。
@@ -119,7 +119,7 @@
 
 ### 実装項目
 
-- conceive（相互指定・異性のみ成立）、出生、baby brain（0〜6歳の world 提供共通 brain）、6歳での 50/50 brain 継承（切替は観測不能）。
+- conceive の自動発生（相対親密度相互 50% 超・異性・fertility 窓・刷り込み判定）、出生、baby brain（0〜6歳の world 提供共通 brain）、6歳での 50/50 brain 継承（切替は観測不能）。
 - sex（出生時 1/2、本人のみ可視）と出産の観測非対称（child-born は母のみ。父には 0歳知人が現れるだけ）。
 - 親密度：stats 依存の月次増減 ＋ action 由来の増減、acquaintance への露出、母子の初期値。
 - memory-limit の年齢関数（老化による物忘れ）、能力曲線の完成（fertility 窓）。
@@ -154,7 +154,10 @@
 | 3 | qty の刻み 1/1000 | **P0**（WIT 確定時） | ABI に直結。後から変えると全 brain が壊れる |
 | 2 | 知人リスト上限（stats 関数 or 定数） | **M1** | まず定数で入れ、stats 関数化は M4 で再検討 |
 | 5 | escrow on/off の実験パラメータ化 | **M3** | デフォルトは off（エスクロー無し）で開始 |
-| 1 | conceive に spouse 状態を挟むか | **決定済み** | 挟まない。相互指定＋異性＋fertility 窓のみ。relation-hint も廃止 |
+| 1 | conceive の成立方式 | **決定済み** | アクション廃止。相対親密度相互 50% 超＋異性＋fertility 窓＋非刷り込みで自動発生 |
+| 11 | fuel→health 写像の係数 | **M1** | food 概念の廃止に伴う置き換え。生存モデルと一緒に確定 |
+| 12 | 生得 skill の保証方式 | **M1** | M1 は生得 skill 前提。baby brain の learn 化は M3/M4 で再検討 |
+| 10 | 刷り込みの閾値・50% 条件のパラメータ化 | **M4** | Westermarck フラグで実装し、値は創発実験で調整 |
 | 6 | 親密度の増減式 | **M4** | まず単純な線形式で入れ、M4 の創発実験で調整 |
 | 7 | if-intimacy（担保型の約束）の是非 | **M4** | 婚姻契約が繰り返しゲーム型だけで創発するか見てから判断 |
 | 8 | 時代プリセットの構成 | **P5** | 開発は狩猟時代（最小初期値）のみで進める |

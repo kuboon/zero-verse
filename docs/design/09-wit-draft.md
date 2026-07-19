@@ -13,7 +13,7 @@ brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めや
 | WIT 要素 | 定義場所 |
 | --- | --- |
 | `types`（human-id, month）、`world brain`、`world-config`、`probe` | 本書（下記） |
-| `types`（resource-id, qty, resource-stack）、`craft-args`、harvest / give | [02-resources.md](./02-resources.md) |
+| `types`（resource-id, qty, resource-stack）、`invoke-args`、harvest / give | [02-resources.md](./02-resources.md) |
 | `types`（skill-id）、`skill-view`、`teach-args` / `learn-args` | [03-skills.md](./03-skills.md) |
 | `standing-order`、`limit-order`、`cond-give`、`give-condition`、`board-quote` | [04-market.md](./04-market.md) |
 | `conceive`、出産の観測非対称 | [05-kinship.md](./05-kinship.md) |
@@ -80,7 +80,7 @@ record world-config {
 2. 呼び出しごとに WASM インスタンスを新規化する。共有はテレパシーになる。
 3. ABI に float を入れない。wasi をリンクしない。乱数はエンジンが決定論的シードとして渡す。
 4. snapshot に入れた情報は無料の全知になる。「自分の内側は全部見える、他人は行動の痕跡だけ」の線を守る。
-5. fuel 消費はその human の food 消費に写像する。memory 上限は年齢の関数。
+5. fuel 消費はその human の生存コスト（health の減少）に写像する。memory 上限は年齢の関数。
 
 ## 言語サポート
 

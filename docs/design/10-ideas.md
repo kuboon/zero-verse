@@ -8,7 +8,7 @@
 
 ## 思考コスト
 
-brain の decide の WASM fuel 消費を、その human の food 消費に写像する。重い brain は自分の食費で遅さを払う。限定合理性がルールでなく価格として入る。
+brain の decide の WASM fuel 消費を、その human の health の減少に写像する。重い brain は自分の体力で遅さを払い、食事（skill）で取り戻す。限定合理性がルールでなく価格として入る。
 
 ## LLM 前提
 
