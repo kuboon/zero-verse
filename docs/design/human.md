@@ -10,7 +10,7 @@ human は world に存在する唯一の要素である（[設計原則](./00-ov
 2. **0〜6歳**：world 提供の共通 baby brain で動く。
 3. **6歳**：父母どちらかの brain を 50% ずつの確率で引き継ぐ。切替は観測不能。
 4. **老化**：stats が低下し、memory 上限が減る（物忘れ）。
-5. **死**：寿命（`max-lifespan-months`）で死ぬ。死は知人にのみ `someone-died` イベントで通知される。
+5. **死**：寿命（`max-lifespan-months`）で死ぬ。死は知人にのみ `someone-died` イベントで通知される。保有 resource は環境に還元される（提案。相続したければ生前に give する → [world.md](./world.md)）。
 
 ## stats（能力曲線）
 

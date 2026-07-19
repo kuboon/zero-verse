@@ -7,7 +7,7 @@
 skill が表す変換の入出力は resource に限らない。**stats も変換の項に入る**。
 
 - **train** = resource を消費して strength を獲得する skill
-- **harvest** = stats（strength）を消費して resource（Φ 由来）を獲得する skill
+- **harvest** = stats（strength）を消費して**環境ストック**から resource を採取する skill。獲得量はストック残量に依存する（[world.md](./world.md)）
 - **食事** = resource を消費して health を回復する skill
 
 つまり train / harvest は専用アクションではなく skill の一種であり、専用 act は廃止。skill の発動は単一アクション **invoke**（craft 改め → [human.md](./human.md)）に統一する。
@@ -75,4 +75,4 @@ variant give-condition {
 - [ ] リバースエンジニアリングの確率モデル：他人の生産物の観測回数と逆算確率の関係。
 - [ ] 同一 skill を複数人から並行して教わることを許すか。
 - [ ] 生得 skill：出生〜6歳（baby brain 期）に食事 skill の獲得をどう保証するか（生得付与か、baby brain が親から learn するか）。
-- [ ] stats を含む変換の保存則：組成保存は resource 側のみに適用される。食事で消えた resource の組成のシンク（体内・排出）をどう扱うか（[02-resources.md](./02-resources.md)）。
+- [x] stats を含む変換の保存則：**環境還元で解決**。食事で消えた resource の組成は環境ストックに還る（[world.md](./world.md)）。

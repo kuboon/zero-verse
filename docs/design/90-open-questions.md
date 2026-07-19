@@ -14,3 +14,5 @@
 10. **刷り込み（Westermarck）の閾値と判定タイミング**、相対親密度 50% 条件の world パラメータ化（[05-kinship.md](./05-kinship.md)）。
 11. **fuel の写像先**：food 概念の廃止に伴い health 減少への写像を採用したが、係数（思考が食事何回分か）は未定（[human.md](./human.md)）。
 12. **生得 skill**：baby brain 期に食事 skill の獲得をどう保証するか（[03-skills.md](./03-skills.md)）。
+13. **環境ストックの観測**：harvest 歩留まりからの推定のみか、観測系 skill を置くか（[world.md](./world.md)）。
+14. **死亡時の保有 resource**：全額環境還元とする提案の確定（相続は生前贈与で創発させる）（[world.md](./world.md)）。
