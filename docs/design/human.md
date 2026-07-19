@@ -1,3 +1,6 @@
+---
+---
+
 # human の仕様
 
 human は world に存在する唯一の要素である（[設計原則](./00-overview.md)）。
