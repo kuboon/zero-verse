@@ -18,7 +18,7 @@ jobs:
       # `uses:` step, but the reusable workflow only invokes build-command as a
       # shell command), pointed at docs/ with BASE_URL wired into --baseurl.
       build-command: |
-        gem install bundler --no-document
-        bundle install
+        sudo gem install bundler --no-document
+        sudo bundle install
         baseurl="$(printf '%s' "$BASE_URL" | sed -E 's#^https?://[^/]+##')"
         bundle exec jekyll build --source docs --destination dist --baseurl "$baseurl"
