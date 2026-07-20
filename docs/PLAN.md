@@ -183,6 +183,14 @@
 - **キャンペーンモード**（[world.md](./design/world.md)）：1 人用チュートリアル。時代・地域シナリオ + クリア条件、ビルトイン NPC brain とのブレンド、スコア = 自 brain 比率の低さ。M1〜M4 の検証シナリオ（交易・貨幣・教育・血縁）と参照 brain 群をそのまま最初のキャンペーン群・NPC に転用する。
 - **追加アイデア**（[10-ideas.md](./design/10-ideas.md)）：「文字」特異ノードはこの段階以降で法則グラフに追加する。
 
+### 状態（2026-07: ブラウザ観戦 UI の初版を達成）
+
+- **[ビューワ](./viewer/index.html)**（`docs/viewer/`、GitHub Pages 配信）: キャンペーンと brain を選択してブラウザ内で engine を実行。速度調整（1〜120 月/秒）・一時停止・1月/1年ステップ・クリア判定。human クリックで stats / 保有 / skill / 親密度 / イベントの全知インスペクタ。親密度グラフ・母子エッジ・環境ストック・板・推移チャートを可視化。
+- **実装形態**: ブラウザは component model をネイティブ実行できないため、engine（`crates/web`）を wasm-bindgen で core wasm 化し、brain / scenario component は **jco transpile**（`--instantiation sync`）で core wasm + JS glue に変換して接続する（`docs/viewer/runtime.js` が wasmtime Linker 相当）。decide ごとの新規インスタンス化（テレパシー禁止）は glue 側で維持。実行は Web Worker に隔離し、応答しない brain は watchdog が worker ごと terminate する。
+- **決定論**: 同一シードのブラウザ実行はネイティブ実行と **state hash が一致**する（fuel 消費が 1 health 量子未満の brain の場合。ビューワには fuel 計量が無く fuel_used = 0 のため、fuel を大きく消費する brain ではネイティブと歴史が分かれる）。公式ランはネイティブ側。
+- **fuel が無いことの副作用**として forager の実験ループに無限ループを発見・修正（全組が既知になると `continue` し続ける。ネイティブでは fuel 切れが打ち切っていて、毎月 fuel 予算を全焼していた）。
+- 持ち越し: 自作 brain（.wasm）のドラッグ&ドロップ実行（jco はブラウザ内 transpile も可能なので実現性あり）、リプレイ共有 URL（シード + 選択の埋め込み）、家系図・価格チャートビュー。
+
 ---
 
 ## 未決事項の決定タイミング
@@ -216,9 +224,11 @@ zero-verse/
 ├── wit/                 # P0-1: WIT 確定版
 ├── crates/
 │   ├── core/            # P0-2: エンジン本体（決定論 lockstep）
-│   └── cli/             # ラン実行・計測・スイープ CLI
-├── brains/              # 参照 brain（自給自足、交易、教師、家族投資…）
-└── web/                 # P5: 観戦 UI（ブラウザ WASM）
+│   ├── cli/             # ラン実行・計測・スイープ CLI
+│   ├── wasm-host/       # wasmtime 実行系（component の公式ラン）
+│   └── web/             # wasm-bindgen 実行系（ブラウザ観戦 UI 用）
+├── guests/              # 参照 brain / scenario（wasm component 化）
+└── docs/viewer/         # 観戦 UI（GitHub Pages。gen/ はビルド成果物）
 ```
 
 構成は P0 着手時に見直してよい。設計ドキュメントの「不変の原則」だけが制約である。

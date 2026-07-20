@@ -62,3 +62,33 @@ jobs:
           a="$(run | tee /dev/stderr | grep 'state hash')"
           b="$(run | grep 'state hash')"
           test "$a" = "$b"
+
+  # ブラウザ実行系（docs/viewer/）: エンジンを wasm-bindgen で、component を
+  # jco transpile で接続する経路を node でヘッドレス検証する（実行経路はビューワと同一）
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            guests
+      - uses: actions/cache@v5
+        id: tools-cache
+        with:
+          path: |
+            ~/.cargo/bin/wasm-tools
+            ~/.cargo/bin/wasm-bindgen
+          key: web-tools-v1-wasm-bindgen-0.2.104
+      - name: install wasm-tools / wasm-bindgen-cli
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install wasm-tools --locked
+          cargo install wasm-bindgen-cli --version 0.2.104 --locked
+      - run: ./scripts/build-web.sh
+      - name: browser-path smoke (node)
+        run: node scripts/smoke-web.mjs

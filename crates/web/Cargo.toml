@@ -1,0 +1,19 @@
+[package]
+name = "zeroverse-web"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zeroverse-core = { path = "../core" }
+# wasm-bindgen-cli と同一バージョンに固定する（scripts/build-web.sh）
+wasm-bindgen = "=0.2.104"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+serde_bytes = "0.11"
+console_error_panic_hook = "0.1"
