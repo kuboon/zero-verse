@@ -133,14 +133,22 @@ fn cmd_m4(args: &[String]) {
 
     println!("M4: 血縁は投資行動に現れるか（夫婦 6 組・{years} 年）");
     println!(
-        "{:>6} {:>6} {:>6} {:>6} {:>10} {:>12} {:>8}",
-        "seed", "出生", "人口", "死亡", "近親出生", "子の技能伝達", "刷り込み"
+        "{:>6} {:>6} {:>6} {:>6} {:>10} {:>12} {:>8} {:>16} {:>16}",
+        "seed",
+        "出生",
+        "人口",
+        "死亡",
+        "近親出生",
+        "子の技能伝達",
+        "刷り込み",
+        "母投資(給/教月)",
+        "父投資(給/教月)"
     );
     for seed in 1..=seeds {
         let r = run_m4(seed, years, WorldParams::default());
         let (taught, total) = r.kids_taught;
         println!(
-            "{:>6} {:>6} {:>6} {:>6} {:>10} {:>9}/{:<2} {:>8}",
+            "{:>6} {:>6} {:>6} {:>6} {:>10} {:>9}/{:<2} {:>8} {:>10.1}/{:<5} {:>10.1}/{:<5}",
             seed,
             r.births,
             r.population,
@@ -148,7 +156,73 @@ fn cmd_m4(args: &[String]) {
             r.incest_births,
             taught,
             total,
-            r.imprinted_pairs
+            r.imprinted_pairs,
+            r.mother_invest.0 as f64 / 1000.0,
+            r.mother_invest.1,
+            r.father_invest.0 as f64 / 1000.0,
+            r.father_invest.1,
+        );
+    }
+}
+
+fn cmd_m4_clans(args: &[String]) {
+    use zeroverse_core::scenarios::run_m4_clans;
+    let seeds = parse_flag(args, "--seeds", 3);
+    let years = parse_flag(args, "--years", 30) as u32;
+
+    println!("M4 派生: 同族内婚 vs 族外婚（2 氏族・{years} 年）");
+    println!(
+        "{:>6} {:>8} {:>6} {:>8} {:>14} {:>12}",
+        "seed", "婚姻", "出生", "育った子", "技能種/子(‰)", "平均消費"
+    );
+    for seed in 1..=seeds {
+        for (name, exogamy) in [("同族", false), ("族外", true)] {
+            let r = run_m4_clans(seed, exogamy, years, WorldParams::default());
+            println!(
+                "{:>6} {:>8} {:>6} {:>8} {:>14} {:>12}",
+                seed,
+                name,
+                r.births,
+                r.grown_children,
+                r.child_harvest_skills_permille,
+                r.child_mean_consumed
+            );
+        }
+    }
+}
+
+fn cmd_m4_marriage(args: &[String]) {
+    use zeroverse_core::scenarios::run_m4_marriage;
+    let seeds = parse_flag(args, "--seeds", 3);
+    let years = parse_flag(args, "--years", 25) as u32;
+
+    println!("M4 派生: 婚姻契約は繰り返しゲームとして維持されるか（{years} 年）");
+    println!(
+        "{:>6} {:>10} {:>10} {:>12} {:>14} {:>10} {:>10} {:>12} {:>6}",
+        "seed",
+        "貞節ペア",
+        "貞節出生",
+        "貞節親密度",
+        "存命ペア親密度",
+        "混合ペア",
+        "混合出生",
+        "混合親密度",
+        "死亡"
+    );
+    for seed in 1..=seeds {
+        let r = run_m4_marriage(seed, years, WorldParams::default());
+        println!(
+            "{:>6} {:>10} {:>10} {:>12.1} {:>7.1} ({:>2}組) {:>10} {:>10} {:>12.1} {:>6}",
+            seed,
+            r.faithful_couples,
+            r.faithful_births,
+            r.faithful_mean_intimacy as f64 / 1000.0,
+            r.faithful_intact_intimacy as f64 / 1000.0,
+            r.faithful_intact_pairs,
+            r.mixed_couples,
+            r.mixed_births,
+            r.mixed_mean_intimacy as f64 / 1000.0,
+            r.deaths,
         );
     }
 }
@@ -161,6 +235,8 @@ fn main() {
         Some("m2") => cmd_m2(&args),
         Some("m3") => cmd_m3(&args),
         Some("m4") => cmd_m4(&args),
+        Some("m4-clans") => cmd_m4_clans(&args),
+        Some("m4-marriage") => cmd_m4_marriage(&args),
         _ => {
             eprintln!("usage: zeroverse run [--seed N] [--humans N] [--years N]");
             eprintln!("       zeroverse m1  [--seeds N] [--pairs N] [--years N]");

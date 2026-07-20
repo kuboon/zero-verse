@@ -84,6 +84,9 @@ pub struct WorldParams {
     /// 妊娠期間と出産の health コスト（女性が負う）
     pub gestation_months: u32,
     pub birth_health_cost: Qty,
+    /// 見かけの年齢の補正係数 β（‰）。vitality = (health+strength)/2 ÷ STAT_MAX として
+    /// apparent-age = age × (1 + β(1 − vitality))（→ docs/design/human.md）
+    pub apparent_age_beta_permille: u64,
 }
 
 impl Default for WorldParams {
@@ -118,6 +121,7 @@ impl Default for WorldParams {
             menopause_months: 45 * 12,
             gestation_months: 9,
             birth_health_cost: 10 * QTY_SCALE,
+            apparent_age_beta_permille: 300, // stats 全損なら 3 割老けて見える
         }
     }
 }

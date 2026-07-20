@@ -218,12 +218,12 @@ impl WasmBrain {
             acquaintances: snap
                 .acquaintances
                 .iter()
-                .map(|&(id, intimacy)| observation::Acquaintance {
-                    id,
-                    // apparent-age / last-interaction はエンジン側未実装のスタブ
-                    apparent_age: 0,
-                    alive: true,
-                    intimacy,
+                .map(|v| observation::Acquaintance {
+                    id: v.id,
+                    apparent_age: v.apparent_age,
+                    alive: v.alive,
+                    intimacy: v.intimacy,
+                    // last-interaction はエンジン側未実装のスタブ
                     last_interaction: None,
                 })
                 .collect(),

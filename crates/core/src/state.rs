@@ -83,6 +83,9 @@ pub struct World {
     /// brain には一切露出しない（公理 8: 血縁は観測できない）
     pub parentage: BTreeMap<HumanId, (HumanId, HumanId)>,
     pub births: u64,
+    /// 血縁投資の台帳（メタ層・M4 計測用）: (親, 子) → (一方的贈与の総量 qty, teach 進捗月数)。
+    /// conditional-give / 板経由は計上しない（無償の投資だけを測る）
+    pub parental_investment: BTreeMap<(HumanId, HumanId), (Qty, u64)>,
 }
 
 impl World {
@@ -163,6 +166,12 @@ impl World {
             f.write_u64(c);
             f.write_u64(m);
             f.write_u64(fa);
+        }
+        for (&(p, c), &(g, t)) in &self.parental_investment {
+            f.write_u64(p);
+            f.write_u64(c);
+            f.write_u64(g);
+            f.write_u64(t);
         }
         f.write_u64(self.humans.len() as u64);
         for h in self.humans.values() {

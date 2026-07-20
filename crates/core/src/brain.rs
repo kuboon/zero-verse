@@ -46,6 +46,18 @@ pub enum Event {
     ActionFailed,
 }
 
+/// 知人の観測ビュー（WIT の observation.acquaintance に相当）
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AcquaintanceView {
+    pub id: HumanId,
+    /// 親密度（両者から同じ値が見える → docs/design/human.md）
+    pub intimacy: Qty,
+    /// 見かけの年齢（年）。実年齢 + stats から算出され、実年齢そのものは見えない
+    ///（→ docs/design/human.md。健康を損ねた人は老けて見える）
+    pub apparent_age: u32,
+    pub alive: bool,
+}
+
 /// 板の公開気配（記名 → docs/design/04-market.md）
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardQuote {
@@ -94,8 +106,8 @@ pub struct Snapshot {
     pub resources: Vec<(ResourceId, Qty)>,
     /// 公開 skill-id と熟練度
     pub skills: Vec<(SkillId, Qty)>,
-    /// 知人と親密度（両者から同じ値が見える → docs/design/human.md）
-    pub acquaintances: Vec<(HumanId, Qty)>,
+    /// 知人（親密度・見かけの年齢・生死 → docs/design/human.md）
+    pub acquaintances: Vec<AcquaintanceView>,
     pub events: Vec<Event>,
     /// 先月の板の公開気配（記名）
     pub market: Vec<BoardQuote>,

@@ -83,6 +83,7 @@ impl World {
             imprinted: Default::default(),
             parentage: BTreeMap::new(),
             births: 0,
+            parental_investment: BTreeMap::new(),
         }
     }
 
@@ -225,7 +226,16 @@ impl World {
                 acquaintances: human
                     .acquaintances
                     .iter()
-                    .map(|&a| (a, self.intimacy_of(hid, a)))
+                    .map(|&a| crate::brain::AcquaintanceView {
+                        id: a,
+                        intimacy: self.intimacy_of(hid, a),
+                        apparent_age: self
+                            .humans
+                            .get(&a)
+                            .map(|o| self.apparent_age_years(o))
+                            .unwrap_or(0),
+                        alive: self.humans.contains_key(&a),
+                    })
                     .collect(),
                 events,
                 market: self
@@ -377,6 +387,18 @@ impl World {
 
     fn pair_key(a: HumanId, b: HumanId) -> (HumanId, HumanId) {
         (a.min(b), a.max(b))
+    }
+
+    /// 見かけの年齢（年）。実年齢そのものは他人に見えず、この値だけが観測される。
+    /// apparent-age = age × (1 + β(1 − vitality))。vitality は health・strength の
+    /// 合成なので、若く見せるには実コストがかかる正直なシグナルになる
+    ///（→ docs/design/human.md。年齢標準曲線に対する比は将来拡張）。
+    pub fn apparent_age_years(&self, h: &crate::state::Human) -> u32 {
+        let vit =
+            (h.stats.health.min(STAT_MAX) + h.stats.strength.min(STAT_MAX)) * 1000 / (2 * STAT_MAX);
+        let beta = self.params.apparent_age_beta_permille;
+        let months = h.age_months as u64 * (1000 + beta * (1000 - vit) / 1000) / 1000;
+        (months / self.params.months_per_year.max(1) as u64) as u32
     }
 
     pub fn intimacy_of(&self, a: HumanId, b: HumanId) -> Qty {
@@ -655,6 +677,15 @@ impl World {
             // 教育も相互作用: 互いを知人にし、親密度を上げる
             self.add_acquaintance(teacher, student);
             self.bump_intimacy(teacher, student);
+            // 血縁投資の台帳（メタ層）: 親から子への teach 進捗月数を計上
+            if let Some(&(m, f)) = self.parentage.get(&student) {
+                if m == teacher || f == teacher {
+                    self.parental_investment
+                        .entry((teacher, student))
+                        .or_insert((0, 0))
+                        .1 += 1;
+                }
+            }
             taught.insert((teacher, student, k));
         }
         taught
@@ -825,6 +856,15 @@ impl World {
                 // 贈与は互いを知人にし、親密度を上げる（最小の相互作用チャネル）
                 self.add_acquaintance(hid, to);
                 self.bump_intimacy(hid, to);
+                // 血縁投資の台帳（メタ層）: 親から子への一方的贈与を計上
+                if let Some(&(m, f)) = self.parentage.get(&to) {
+                    if m == hid || f == hid {
+                        self.parental_investment
+                            .entry((hid, to))
+                            .or_insert((0, 0))
+                            .0 += amt;
+                    }
+                }
             }
             Act::Invoke {
                 inputs,
