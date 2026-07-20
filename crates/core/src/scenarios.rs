@@ -479,6 +479,285 @@ pub fn run_m2(seed: u64, years: u32, params: WorldParams) -> M2Result {
     }
 }
 
+// ---------------------------------------------------------------------------
+// M3: skill の売買は自発するか（docs/PLAN.md M3）
+//
+// セットアップ: 教師 2 人（H_0 高熟練）と徒弟 4 人（harvest skill なし）。
+// 徒弟は初期食料が尽きる前に H_0 を習得する必要があり、教育の対価を
+// if-taught-me（「今月教育が進捗したら支払う」）の月払いで支払う。
+// world 側に授業料も契約も存在しない。徒弟制はホールドアップ問題への brain の適応。
+//
+// 秘匿 vs 公開: open 教師は余剰食料を板で売る → 売りに出た resource は
+// それを作る skill を確率的に漏らす（リバースエンジニアリング）。
+// secret 教師は売らない → 漏れない（教える相手からしか広がらない）。
+// ---------------------------------------------------------------------------
+
+/// 教師 brain: 自分の skill を月払いの徒弟に教える。教えたのに払われなければ破門。
+pub struct TeacherBrain {
+    pub skill: SkillId,
+    pub harvest_skill: SkillId, // = skill（食料生産と教材が同じ H_0）
+    pub eat_skill: SkillId,
+    pub food: ResourceId,
+    pub fee_resource: ResourceId,
+    pub fee_amount: Qty,
+    /// 板で余剰食料を売るか（公開戦略）。売れば skill が漏れる
+    pub sell_product: bool,
+    roster: Vec<HumanId>,
+    current: usize,
+    taught_last_month: Option<HumanId>,
+}
+
+impl TeacherBrain {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        skill: SkillId,
+        eat_skill: SkillId,
+        food: ResourceId,
+        fee_resource: ResourceId,
+        fee_amount: Qty,
+        sell_product: bool,
+        roster: Vec<HumanId>,
+    ) -> Self {
+        TeacherBrain {
+            skill,
+            harvest_skill: skill,
+            eat_skill,
+            food,
+            fee_resource,
+            fee_amount,
+            sell_product,
+            roster,
+            current: 0,
+            taught_last_month: None,
+        }
+    }
+}
+
+impl Brain for TeacherBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::{Event, StandingOrder};
+
+        // 先月教えた相手の支払いを確認。教えたのに払われなければ破門（次の徒弟へ）。
+        // 進捗イベントが無ければ修了（または不成立）なので同じく次へ。
+        if let Some(student) = self.taught_last_month.take() {
+            let progressed = snap.events.iter().any(
+                |e| matches!(e, Event::TeachProgressed { partner, .. } if *partner == student),
+            );
+            let paid = snap
+                .events
+                .iter()
+                .any(|e| matches!(e, Event::ReceivedTransfer { from, resource, amount }
+                    if *from == student && *resource == self.fee_resource && *amount >= self.fee_amount));
+            if !progressed || !paid {
+                self.current += 1; // 修了 or 不払い: 次の徒弟へ
+            }
+        }
+
+        let mut acts = vec![
+            Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            },
+            Act::Invoke {
+                inputs: vec![(self.food, QTY_SCALE)], // 必要分だけ食べ、余剰は売る
+                using_skills: vec![self.eat_skill],
+            },
+        ];
+        if let Some(&student) = self.roster.get(self.current % self.roster.len().max(1)) {
+            acts.push(Act::Teach {
+                student,
+                skill: self.skill,
+            });
+            self.taught_last_month = Some(student);
+        }
+        acts.extend(discard_junk(snap, &[self.food, self.fee_resource], 1));
+
+        let mut orders = Vec::new();
+        if self.sell_product {
+            let surplus = held(snap, self.food).saturating_sub(2 * QTY_SCALE);
+            if surplus > 0 {
+                orders.push(StandingOrder::Limit {
+                    give_resource: self.food,
+                    give_amount: surplus,
+                    want_resource: self.fee_resource,
+                    want_amount: surplus,
+                    partial: true,
+                });
+            }
+        }
+
+        Decision {
+            acts,
+            orders,
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// 徒弟 brain: 習得まで learn + if-taught-me の月払い。習得後は自活する。
+pub struct ApprenticeBrain {
+    pub teacher: HumanId,
+    pub skill: SkillId,
+    pub eat_skill: SkillId,
+    pub food: ResourceId,
+    pub fee_resource: ResourceId,
+    pub fee_amount: Qty,
+}
+
+impl Brain for ApprenticeBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::{GiveCondition, StandingOrder};
+        let acquired = snap.skills.iter().any(|&(s, _)| s == self.skill);
+        let mut acts = Vec::new();
+        let mut orders = Vec::new();
+
+        if acquired {
+            acts.push(Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.skill],
+            });
+        } else {
+            acts.push(Act::Learn {
+                teacher: self.teacher,
+                skill: self.skill,
+            });
+            // 徒弟制: 「今月教育が進捗したら支払う」— 月単位のアトミック性だけが担保
+            orders.push(StandingOrder::ConditionalGive {
+                to: self.teacher,
+                resource: self.fee_resource,
+                amount: self.fee_amount,
+                condition: GiveCondition::IfTaughtMe(self.skill),
+            });
+        }
+        // 食いつなぎ（節約: health が下がったときだけ食べる）
+        if snap.health < 90 * QTY_SCALE && held(snap, self.food) > 0 {
+            acts.push(Act::Invoke {
+                inputs: vec![(self.food, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            });
+        }
+        acts.extend(discard_junk(snap, &[self.food, self.fee_resource], 1));
+
+        Decision {
+            acts,
+            orders,
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+pub struct M3Setup {
+    pub world: World,
+    pub brains: BTreeMap<HumanId, Box<dyn Brain>>,
+    pub teacher_ids: Vec<HumanId>,
+    pub apprentice_ids: Vec<HumanId>,
+    /// H_0 の内部 skill index（習得判定用）
+    pub skill_idx: usize,
+}
+
+/// M3 実験世界: 教師 2 + 徒弟 4。secret=true なら教師は板で売らない（秘匿戦略）。
+pub fn build_m3(seed: u64, secret: bool, params: WorldParams) -> M3Setup {
+    let mut world = World::new(seed, 6, params);
+    let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+    let (teachers, apprentices) = (&ids[..2], &ids[2..]);
+
+    let rid = |w: &World, p: usize| w.laws.id_of_index[p];
+    let sid = |w: &World, s: usize| w.laws.skill_id_of_index[s];
+
+    // 全員 E_0（食文化は共通）。教師だけ H_0 を持つ。
+    for &hid in &ids {
+        world.grant_skill(hid, N_PRIMARY, STAT_MAX); // E_0
+    }
+    for &t in teachers {
+        world.grant_skill(t, 0, STAT_MAX); // H_0
+    }
+    // 教師と徒弟は初期知人（徒弟 2 人ずつ）
+    for (i, &a) in apprentices.iter().enumerate() {
+        world.add_acquaintance(teachers[i % 2], a);
+    }
+
+    let food = rid(&world, 0);
+    let fee = rid(&world, 3);
+    let skill = sid(&world, 0);
+    let eat = sid(&world, N_PRIMARY);
+    let fee_amount = QTY_SCALE; // 1.000 / 月
+
+    let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
+    for (i, &t) in teachers.iter().enumerate() {
+        let roster: Vec<HumanId> = apprentices
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| j % 2 == i)
+            .map(|(_, &a)| a)
+            .collect();
+        brains.insert(
+            t,
+            Box::new(TeacherBrain::new(
+                skill, eat, food, fee, fee_amount, !secret, roster,
+            )),
+        );
+    }
+    for &a in apprentices {
+        let teacher = teachers[apprentices.iter().position(|&x| x == a).unwrap() % 2];
+        brains.insert(
+            a,
+            Box::new(ApprenticeBrain {
+                teacher,
+                skill,
+                eat_skill: eat,
+                food,
+                fee_resource: fee,
+                fee_amount,
+            }),
+        );
+    }
+
+    M3Setup {
+        world,
+        brains,
+        teacher_ids: teachers.to_vec(),
+        apprentice_ids: apprentices.to_vec(),
+        skill_idx: 0,
+    }
+}
+
+pub struct M3Result {
+    pub apprentices_with_skill: usize,
+    pub apprentices_total: usize,
+    pub paid_teach_transfers: u64,
+    pub re_acquisitions: u64,
+    pub alive: usize,
+}
+
+/// M3 実験を回す。
+pub fn run_m3(seed: u64, secret: bool, years: u32, params: WorldParams) -> M3Result {
+    let mut setup = build_m3(seed, secret, params);
+    let months = years * setup.world.params.months_per_year;
+    setup.world.run(months, &mut setup.brains);
+
+    let with_skill = setup
+        .apprentice_ids
+        .iter()
+        .filter(|id| {
+            setup
+                .world
+                .humans
+                .get(id)
+                .map(|h| h.skills.contains_key(&setup.skill_idx))
+                .unwrap_or(false)
+        })
+        .count();
+    M3Result {
+        apprentices_with_skill: with_skill,
+        apprentices_total: setup.apprentice_ids.len(),
+        paid_teach_transfers: setup.world.paid_teach_transfers,
+        re_acquisitions: setup.world.re_acquisitions,
+        alive: setup.world.humans.len(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,6 +804,45 @@ mod tests {
                 top_lambda <= min_primary_lambda,
                 "seed {seed}: medium lambda {top_lambda} > best primary {min_primary_lambda}: {:?}",
                 r.involvement
+            );
+        }
+    }
+
+    /// M3 合格基準（docs/PLAN.md）:
+    /// - world 側に価格も契約も置かずに、skill の対価付き教育（if-taught-me の月払いを
+    ///   伴う teach/learn の対）が継続的に成立する
+    /// - 秘匿（売らない）と公開（売って模倣される）の両戦略が観測される:
+    ///   公開教師の世界では RE による無償習得が発生し、秘匿教師の世界では発生しない
+    #[test]
+    fn paid_teaching_works_and_secrecy_controls_leakage() {
+        // 実験を短くするため漏洩率を上げる
+        let params = WorldParams {
+            re_permille: 20,
+            ..Default::default()
+        };
+        for seed in 1..=3 {
+            let open = run_m3(seed, false, 20, params.clone());
+            let secret = run_m3(seed, true, 20, params.clone());
+            for (name, r) in [("open", &open), ("secret", &secret)] {
+                assert_eq!(
+                    r.apprentices_with_skill, r.apprentices_total,
+                    "seed {seed} {name}: {}/{} apprentices acquired the skill",
+                    r.apprentices_with_skill, r.apprentices_total
+                );
+                assert!(
+                    r.paid_teach_transfers >= 8,
+                    "seed {seed} {name}: only {} paid lessons",
+                    r.paid_teach_transfers
+                );
+                assert_eq!(r.alive, 6, "seed {seed} {name}: someone starved");
+            }
+            assert!(
+                open.re_acquisitions > 0,
+                "seed {seed}: open teacher never got reverse-engineered"
+            );
+            assert_eq!(
+                secret.re_acquisitions, 0,
+                "seed {seed}: secret teacher leaked anyway"
             );
         }
     }

@@ -56,6 +56,7 @@ impl World {
                     },
                     inventory,
                     skills: BTreeMap::new(),
+                    learning: BTreeMap::new(),
                     acquaintances: Default::default(),
                     consumed_dg: 0,
                     pending_events: Vec::new(),
@@ -75,6 +76,8 @@ impl World {
             dead_ledger: Vec::new(),
             last_quotes: Vec::new(),
             trade_volume: BTreeMap::new(),
+            paid_teach_transfers: 0,
+            re_acquisitions: 0,
         }
     }
 
@@ -237,9 +240,15 @@ impl World {
         }
 
         // 4. resolve: human-id 昇順、各人 commit 順。不正な宣言は個別に無効。
-        //    月内解決順序: act →（teach/learn・conditional-give は M3）→ 板マッチング
+        //    月内解決順序（最終形 → docs/design/08-architecture.md）:
+        //    一方向 act → teach/learn 成立 → conditional-give 判定 → 板マッチング → RE
         let mut fuel_costs: BTreeMap<HumanId, Qty> = BTreeMap::new();
-        let mut orders: Vec<(HumanId, crate::brain::StandingOrder)> = Vec::new();
+        let mut limit_orders: Vec<(HumanId, crate::brain::StandingOrder)> = Vec::new();
+        let mut cond_gives: Vec<(HumanId, HumanId, u64, Qty, crate::brain::GiveCondition)> =
+            Vec::new();
+        let mut teaches: Vec<(HumanId, HumanId, u64)> = Vec::new(); // (teacher, student, skill)
+        let mut learns: Vec<(HumanId, HumanId, u64)> = Vec::new(); // (student, teacher, skill)
+        let mut unilateral: Vec<(HumanId, Act)> = Vec::new();
         for &hid in &human_ids {
             let decision = decisions.remove(&hid).unwrap_or_default();
             // 思考コスト: fuel 消費を health 減少に写像（upkeep で適用）
@@ -249,10 +258,22 @@ impl World {
             }
             let slots = self.params.act_slots_base as usize;
             for act in decision.acts.into_iter().take(slots) {
-                self.apply_act(hid, act, month);
+                match act {
+                    Act::Teach { student, skill } => teaches.push((hid, student, skill)),
+                    Act::Learn { teacher, skill } => learns.push((hid, teacher, skill)),
+                    other => unilateral.push((hid, other)),
+                }
             }
             for order in decision.orders {
-                orders.push((hid, order));
+                match order {
+                    crate::brain::StandingOrder::Limit { .. } => limit_orders.push((hid, order)),
+                    crate::brain::StandingOrder::ConditionalGive {
+                        to,
+                        resource,
+                        amount,
+                        condition,
+                    } => cond_gives.push((hid, to, resource, amount, condition)),
+                }
             }
             if let Some(mem) = decision.memory {
                 // memory 上限は年齢の関数（M1 仮: 定数 64KiB）
@@ -264,8 +285,18 @@ impl World {
                 }
             }
         }
-        // 4'. 板マッチング（standing orders は毎月全交換）
-        self.resolve_board(month, orders);
+        // 4a. 一方向 act（invoke / give / discard）
+        for (hid, act) in unilateral {
+            self.apply_act(hid, act, month);
+        }
+        // 4b. teach/learn 成立（同月ペアのみ進捗）
+        let taught = self.resolve_teaching(teaches, learns);
+        // 4c. conditional-give 判定（if-taught-me はここで月単位アトミックになる）
+        self.resolve_conditional_gives(cond_gives, &taught);
+        // 4d. 板マッチング（standing orders は毎月全交換）
+        self.resolve_board(month, limit_orders);
+        // 4e. リバースエンジニアリング（板での販売が skill を確率的に漏らす）
+        self.resolve_reverse_engineering(month);
 
         // 5. upkeep: health 自然減 + 占有維持費 → strength 回復 → 加齢 → 死
         let mut dead: Vec<HumanId> = Vec::new();
@@ -316,6 +347,198 @@ impl World {
     pub(crate) fn push_event(&mut self, hid: HumanId, ev: Event) {
         if let Some(h) = self.humans.get_mut(&hid) {
             h.pending_events.push(ev);
+        }
+    }
+
+    /// teach/learn の解決。同月に (teacher, student, skill) の宣言が対をなしたものだけ
+    /// 1 ヶ月分進捗する（docs/design/03-skills.md）。返り値は今月成立した組。
+    fn resolve_teaching(
+        &mut self,
+        teaches: Vec<(HumanId, HumanId, u64)>,
+        learns: Vec<(HumanId, HumanId, u64)>,
+    ) -> std::collections::BTreeSet<(HumanId, HumanId, usize)> {
+        use std::collections::BTreeSet;
+        let learn_set: BTreeSet<(HumanId, HumanId, u64)> = learns
+            .into_iter()
+            .map(|(student, teacher, skill)| (teacher, student, skill))
+            .collect();
+        let mut taught: BTreeSet<(HumanId, HumanId, usize)> = BTreeSet::new();
+
+        for (teacher, student, skill_pub) in teaches {
+            if !learn_set.contains(&(teacher, student, skill_pub)) {
+                self.push_event(teacher, Event::ActionFailed);
+                continue;
+            }
+            let Some(&k) = self.laws.skill_index_of_id.get(&skill_pub) else {
+                self.push_event(teacher, Event::ActionFailed);
+                continue;
+            };
+            if taught.contains(&(teacher, student, k)) {
+                continue; // 同月の重複宣言は 1 回分
+            }
+            let teacher_prof = self
+                .humans
+                .get(&teacher)
+                .and_then(|h| h.skills.get(&k).copied())
+                .unwrap_or(0);
+            let student_has = self
+                .humans
+                .get(&student)
+                .map(|h| h.skills.contains_key(&k))
+                .unwrap_or(true);
+            if teacher_prof == 0 || student_has {
+                self.push_event(teacher, Event::ActionFailed);
+                self.push_event(student, Event::ActionFailed);
+                continue;
+            }
+            // 進捗 = 教師の熟練% × 学習者の cognition% / 100（若いほど速い曲線は cognition 経由）
+            let cognition = self
+                .humans
+                .get(&student)
+                .map(|h| h.stats.cognition)
+                .unwrap_or(0);
+            let add = ((teacher_prof / QTY_SCALE) * (cognition / QTY_SCALE) / 100).max(1);
+            let needed = self.params.teach_progress_needed;
+            let initial = self.params.learn_initial_prof;
+            let done = {
+                let s = self.humans.get_mut(&student).unwrap();
+                let p = s.learning.entry(k).or_insert(0);
+                *p += add;
+                if *p >= needed {
+                    s.learning.remove(&k);
+                    s.skills.insert(k, initial);
+                    true
+                } else {
+                    false
+                }
+            };
+            self.push_event(
+                teacher,
+                Event::TeachProgressed {
+                    partner: student,
+                    skill: skill_pub,
+                },
+            );
+            self.push_event(
+                student,
+                Event::TeachProgressed {
+                    partner: teacher,
+                    skill: skill_pub,
+                },
+            );
+            if done {
+                self.push_event(student, Event::SkillAcquired(skill_pub));
+            }
+            // 教育も相互作用: 互いを知人にする
+            self.add_acquaintance(teacher, student);
+            taught.insert((teacher, student, k));
+        }
+        taught
+    }
+
+    /// conditional-give の判定（docs/design/04-market.md の give-condition）。
+    /// if-received は 2 パス評価: 相互の cond-give 同士でも同月内で成立できる。
+    fn resolve_conditional_gives(
+        &mut self,
+        gives: Vec<(HumanId, HumanId, u64, Qty, crate::brain::GiveCondition)>,
+        taught: &std::collections::BTreeSet<(HumanId, HumanId, usize)>,
+    ) {
+        use crate::brain::GiveCondition;
+        let mut executed = vec![false; gives.len()];
+        for pass in 0..2 {
+            for (idx, (hid, to, res_pub, amount, cond)) in gives.iter().enumerate() {
+                if executed[idx] {
+                    continue;
+                }
+                let fire = match cond {
+                    GiveCondition::Unconditional => pass == 0,
+                    GiveCondition::IfTaughtMe(skill_pub) => {
+                        // 「今月 to が自分に教えて進捗した」
+                        pass == 0
+                            && self
+                                .laws
+                                .skill_index_of_id
+                                .get(skill_pub)
+                                .is_some_and(|&k| taught.contains(&(*to, *hid, k)))
+                    }
+                    GiveCondition::IfReceived { resource, amount } => {
+                        self.received_this_month(*hid, *to, *resource) >= *amount
+                    }
+                };
+                if fire {
+                    let was_teach_payment = matches!(cond, GiveCondition::IfTaughtMe(_));
+                    self.apply_act(
+                        *hid,
+                        Act::Give {
+                            to: *to,
+                            resource: *res_pub,
+                            amount: *amount,
+                        },
+                        0,
+                    );
+                    if was_teach_payment {
+                        self.paid_teach_transfers += 1;
+                    }
+                    executed[idx] = true;
+                }
+            }
+        }
+    }
+
+    /// 今月 from から resource を受け取った量（pending events から数える）
+    fn received_this_month(&self, hid: HumanId, from: HumanId, resource: u64) -> Qty {
+        self.humans
+            .get(&hid)
+            .map(|h| {
+                h.pending_events
+                    .iter()
+                    .filter_map(|e| match e {
+                        Event::ReceivedTransfer {
+                            from: f,
+                            resource: r,
+                            amount,
+                        } if *f == from && *r == resource => Some(*amount),
+                        _ => None,
+                    })
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+
+    /// リバースエンジニアリング（docs/design/03-skills.md）:
+    /// 板に売りを出した resource は、それを作る skill を確率的に漏らす。
+    /// primary i の売り → harvest_i、waste i の売り → eat_i（skill 内部 index は一致）。
+    fn resolve_reverse_engineering(&mut self, month: u32) {
+        use std::collections::BTreeSet;
+        let mut exposed: BTreeSet<usize> = BTreeSet::new();
+        for &(_, gi, ..) in &self.last_quotes {
+            exposed.insert(gi); // resource 内部 index == それを産出する skill の内部 index
+        }
+        if exposed.is_empty() {
+            return;
+        }
+        let human_ids: Vec<HumanId> = self.humans.keys().copied().collect();
+        let prof = self.params.learn_initial_prof / 2;
+        for &hid in &human_ids {
+            for &k in &exposed {
+                let lacks = self
+                    .humans
+                    .get(&hid)
+                    .map(|h| !h.skills.contains_key(&k))
+                    .unwrap_or(false);
+                if !lacks {
+                    continue;
+                }
+                let h = hash4(self.seed, 0x5EEA, month as u64, hid ^ ((k as u64) << 48));
+                if h % 1000 < self.params.re_permille {
+                    let skill_pub = self.laws.skill_id_of_index[k];
+                    let human = self.humans.get_mut(&hid).unwrap();
+                    human.skills.insert(k, prof);
+                    human.learning.remove(&k);
+                    self.push_event(hid, Event::SkillAcquired(skill_pub));
+                    self.re_acquisitions += 1;
+                }
+            }
         }
     }
 
@@ -384,6 +607,8 @@ impl World {
             } => {
                 self.apply_invoke(hid, inputs, using_skills, month);
             }
+            // teach/learn は resolve_teaching で対にして解決される（ここには来ない）
+            Act::Teach { .. } | Act::Learn { .. } => {}
         }
     }
 

@@ -62,6 +62,12 @@ pub struct WorldParams {
     pub epsilon_permille: u64,
     /// 思考コスト換算: health 0.001 あたりの fuel（docs/design/human.md）
     pub fuel_per_health: u64,
+    /// 教育完了に必要な進捗ポイント（毎月 教師熟練% × 学習者cognition% が貯まる）
+    pub teach_progress_needed: u64,
+    /// 教育で獲得した skill の初期熟練度
+    pub learn_initial_prof: Qty,
+    /// リバースエンジニアリング確率（‰/月。産出 resource が板で売られている skill が対象）
+    pub re_permille: u64,
 }
 
 impl Default for WorldParams {
@@ -84,6 +90,9 @@ impl Default for WorldParams {
             eat_health_per_unit: 2 * QTY_SCALE,
             epsilon_permille: 10,
             fuel_per_health: 1_000_000, // health 0.001 = 100 万 fuel（M1 仮）
+            teach_progress_needed: 360, // 教師 100%・cognition 60% で 6 ヶ月
+            learn_initial_prof: 50 * QTY_SCALE,
+            re_permille: 2,
         }
     }
 }

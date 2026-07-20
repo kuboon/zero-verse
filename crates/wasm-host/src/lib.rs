@@ -73,10 +73,16 @@ impl commit::Host for HostState {
                 amount: s.amount,
             },
             action::Act::Idle => CoreAct::Idle,
-            // teach/learn/introduce は M3/M4 でエンジン側実装が入るまで idle 扱い
-            action::Act::Teach(_) | action::Act::Learn(_) | action::Act::Introduce(_) => {
-                CoreAct::Idle
-            }
+            action::Act::Teach(t) => CoreAct::Teach {
+                student: t.student,
+                skill: t.skill,
+            },
+            action::Act::Learn(l) => CoreAct::Learn {
+                teacher: l.teacher,
+                skill: l.skill,
+            },
+            // introduce は M4 でエンジン側実装が入るまで idle 扱い
+            action::Act::Introduce(_) => CoreAct::Idle,
         };
         self.commits.acts.push(act);
     }
@@ -93,8 +99,23 @@ impl commit::Host for HostState {
                     partial: l.partial,
                 });
             }
-            // conditional-give は M3 で解決系が入るまで無視
-            action::StandingOrder::ConditionalGive(_) => {}
+            action::StandingOrder::ConditionalGive(c) => {
+                use zeroverse_core::brain::GiveCondition as CoreCond;
+                let condition = match c.condition {
+                    action::GiveCondition::IfReceived(s) => CoreCond::IfReceived {
+                        resource: s.resource,
+                        amount: s.amount,
+                    },
+                    action::GiveCondition::IfTaughtMe(k) => CoreCond::IfTaughtMe(k),
+                    action::GiveCondition::UnconditionalScheduled => CoreCond::Unconditional,
+                };
+                self.commits.orders.push(CoreOrder::ConditionalGive {
+                    to: c.to,
+                    resource: c.stack.resource,
+                    amount: c.stack.amount,
+                    condition,
+                });
+            }
         }
     }
 
@@ -187,6 +208,8 @@ impl WasmBrain {
                     observation::ActionKind::Invoke,
                     observation::ActionKind::Give,
                     observation::ActionKind::Discard,
+                    observation::ActionKind::Teach,
+                    observation::ActionKind::Learn,
                     observation::ActionKind::Idle,
                 ],
                 fuel_budget,
@@ -238,6 +261,13 @@ impl WasmBrain {
                         produced: produced.iter().copied().map(stack).collect(),
                         health_gain: *health_gain,
                     }),
+                    E::TeachProgressed { partner, skill } => {
+                        observation::Event::TeachProgressed(observation::TeachInfo {
+                            partner: *partner,
+                            skill: *skill,
+                        })
+                    }
+                    E::SkillAcquired(s) => observation::Event::SkillAcquired(*s),
                     E::ActionFailed => {
                         observation::Event::ActionFailed(observation::ActionKind::Invoke)
                     }

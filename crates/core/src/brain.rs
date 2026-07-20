@@ -36,6 +36,10 @@ pub enum Event {
         gave: (ResourceId, Qty),
         got: (ResourceId, Qty),
     },
+    /// 今月 teach/learn のペアが成立して 1 ヶ月分進捗した（残り月数は開示しない）
+    TeachProgressed { partner: HumanId, skill: SkillId },
+    /// skill を獲得した（教育の完了、またはリバースエンジニアリング）
+    SkillAcquired(SkillId),
     /// 失敗理由は返さない
     ActionFailed,
 }
@@ -60,6 +64,12 @@ pub enum StandingOrder {
         want_resource: ResourceId,
         want_amount: Qty,
         partial: bool,
+    },
+    ConditionalGive {
+        to: HumanId,
+        resource: ResourceId,
+        amount: Qty,
+        condition: GiveCondition,
     },
 }
 
@@ -106,7 +116,27 @@ pub enum Act {
         resource: ResourceId,
         amount: Qty,
     },
+    /// 同月に相手の Learn と対をなして 1 ヶ月分進捗（→ docs/design/03-skills.md）
+    Teach {
+        student: HumanId,
+        skill: SkillId,
+    },
+    Learn {
+        teacher: HumanId,
+        skill: SkillId,
+    },
     Idle,
+}
+
+/// conditional-give の条件（WIT の action.give-condition）
+#[derive(Clone, Debug)]
+pub enum GiveCondition {
+    /// 相対交換（OTC）: 今月 to から stack を受け取っていたら渡す
+    IfReceived { resource: ResourceId, amount: Qty },
+    /// 徒弟制の分割払い: 今月 to が自分に skill を教えて進捗したら渡す
+    IfTaughtMe(SkillId),
+    /// 無条件（予約送金）
+    Unconditional,
 }
 
 #[derive(Clone, Debug, Default)]
