@@ -18,6 +18,7 @@ jobs:
       # `uses:` step, but the reusable workflow only invokes build-command as a
       # shell command), pointed at docs/ with BASE_URL wired into --baseurl.
       build-command: |
+        export BUNDLE_GEMFILE=docs/Gemfile
         sudo gem install bundler --no-document
         sudo bundle install
         baseurl="$(printf '%s' "$BASE_URL" | sed -E 's#^https?://[^/]+##')"
