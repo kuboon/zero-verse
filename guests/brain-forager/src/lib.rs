@@ -167,7 +167,12 @@ impl exports::zeroverse::world::brain_api::Guest for Forager {
             .collect();
         resources.sort_unstable();
         let combos = (skills.len() as u64) * (1 + resources.len() as u64);
-        while acted < 4 && combos > 0 {
+        // 全組が既知になった後も continue で回り続けないよう試行数を combos で打ち切る。
+        // （打ち切りが無いと無限ループ = 毎月 fuel 予算を全焼して health を浪費する。
+        // fuel 計量の無いホストでは停止しない）
+        let mut tries = 0u64;
+        while acted < 4 && tries < combos {
+            tries += 1;
             let c = know.next_experiment % combos;
             know.next_experiment += 1;
             let skill = skills[(c / (1 + resources.len() as u64)) as usize];

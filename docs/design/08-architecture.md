@@ -9,7 +9,7 @@
 - 三形態に同じコアを載せる：
   1. **ネイティブ**（採点用大規模ラン）
   2. **Durable Objects**（スローモーの人間参加 realm）
-  3. **ブラウザ WASM**（ローカル観戦とデバッグ）
+  3. **ブラウザ WASM**（ローカル観戦とデバッグ）— 実装済み（`crates/web` + `docs/viewer/`）。ブラウザは component model をネイティブ実行できないため、brain / scenario component は jco transpile した core wasm + JS glue で接続する。JS glue が wasmtime Linker 相当（commit 収集・decide ごとの新規インスタンス化）。ただし **fuel 計量は無い**（fuel_used = 0）ので、思考コストが効く world ではネイティブと歴史が分かれる。公式ランは常にネイティブ形態
 
 ## brain 実行
 
