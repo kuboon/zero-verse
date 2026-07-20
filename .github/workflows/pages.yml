@@ -19,7 +19,7 @@ jobs:
       # shell command), pointed at docs/ with BASE_URL wired into --baseurl.
       build-command: |
         export BUNDLE_GEMFILE=docs/Gemfile
-        sudo gem install bundler --no-document
-        sudo bundle install
+        sudo -E gem install bundler --no-document
+        sudo -E bundle install
         baseurl="$(printf '%s' "$BASE_URL" | sed -E 's#^https?://[^/]+##')"
         bundle exec jekyll build --source docs --destination dist --baseurl "$baseurl"
