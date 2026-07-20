@@ -237,7 +237,9 @@ impl World {
         }
 
         // 4. resolve: human-id 昇順、各人 commit 順。不正な宣言は個別に無効。
+        //    月内解決順序: act →（teach/learn・conditional-give は M3）→ 板マッチング
         let mut fuel_costs: BTreeMap<HumanId, Qty> = BTreeMap::new();
+        let mut orders: Vec<(HumanId, crate::brain::StandingOrder)> = Vec::new();
         for &hid in &human_ids {
             let decision = decisions.remove(&hid).unwrap_or_default();
             // 思考コスト: fuel 消費を health 減少に写像（upkeep で適用）
@@ -249,6 +251,9 @@ impl World {
             for act in decision.acts.into_iter().take(slots) {
                 self.apply_act(hid, act, month);
             }
+            for order in decision.orders {
+                orders.push((hid, order));
+            }
             if let Some(mem) = decision.memory {
                 // memory 上限は年齢の関数（M1 仮: 定数 64KiB）
                 let limit = 64 * 1024;
@@ -259,6 +264,8 @@ impl World {
                 }
             }
         }
+        // 4'. 板マッチング（standing orders は毎月全交換）
+        self.resolve_board(month, orders);
 
         // 5. upkeep: health 自然減 + 占有維持費 → strength 回復 → 加齢 → 死
         let mut dead: Vec<HumanId> = Vec::new();
@@ -306,7 +313,7 @@ impl World {
         self.month += 1;
     }
 
-    fn push_event(&mut self, hid: HumanId, ev: Event) {
+    pub(crate) fn push_event(&mut self, hid: HumanId, ev: Event) {
         if let Some(h) = self.humans.get_mut(&hid) {
             h.pending_events.push(ev);
         }

@@ -72,11 +72,35 @@ fn cmd_m1(args: &[String]) {
     }
 }
 
+fn cmd_m2(args: &[String]) {
+    use zeroverse_core::scenarios::run_m2;
+    let seeds = parse_flag(args, "--seeds", 3);
+    let years = parse_flag(args, "--years", 20) as u32;
+
+    println!("M2: 貨幣は創発するか（20 human・賦存 +2 シフト・{years} 年）");
+    for seed in 1..=seeds {
+        let r = run_m2(seed, years, WorldParams::default());
+        println!(
+            "seed {seed}: 媒介 = resource#{} 関与率 {}/1000 λ={}‰",
+            r.top, r.top_share, r.involvement[r.top].1
+        );
+        for (i, &(share, lambda)) in r.involvement.iter().enumerate() {
+            if share > 0 {
+                println!(
+                    "  #{i:<2} 関与 {share:>4}/1000  λ {lambda:>3}‰{}",
+                    if i >= 5 { "  (廃棄物)" } else { "" }
+                );
+            }
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("run") => cmd_run(&args),
         Some("m1") => cmd_m1(&args),
+        Some("m2") => cmd_m2(&args),
         _ => {
             eprintln!("usage: zeroverse run [--seed N] [--humans N] [--years N]");
             eprintln!("       zeroverse m1  [--seeds N] [--pairs N] [--years N]");
