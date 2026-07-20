@@ -14,6 +14,7 @@ pub mod brain;
 pub mod engine;
 pub mod laws;
 pub mod rng;
+pub mod scenarios;
 pub mod state;
 
 pub type Qty = u64;
@@ -46,6 +47,18 @@ pub struct WorldParams {
     pub initial_env_stock: Qty,
     /// 生成時の human 保有（primary 1 種あたり）
     pub initial_human_stock: Qty,
+    /// harvest の基本獲得量（熟練度 100% ・ストック十分のとき）
+    pub harvest_base_yield: Qty,
+    /// harvest 1 回あたりの strength 消費
+    pub harvest_strength_cost: Qty,
+    /// harvest のストック残量係数の半飽和点（stock/(stock+half) → 枯渇で細る）
+    pub harvest_half_saturation: Qty,
+    /// strength の毎月回復量（能力曲線の基準値まで）
+    pub strength_regen_per_month: Qty,
+    /// 食事 1.000 単位あたりの health 回復
+    pub eat_health_per_unit: Qty,
+    /// ε: 偶発的出会いの確率（千分率/月。公理 6）
+    pub epsilon_permille: u64,
 }
 
 impl Default for WorldParams {
@@ -61,6 +74,12 @@ impl Default for WorldParams {
             body_volume: QTY_SCALE, // 1.000
             initial_env_stock: 1_000 * QTY_SCALE,
             initial_human_stock: 10 * QTY_SCALE,
+            harvest_base_yield: 3 * QTY_SCALE,
+            harvest_strength_cost: 5 * QTY_SCALE,
+            harvest_half_saturation: 200 * QTY_SCALE,
+            strength_regen_per_month: 10 * QTY_SCALE,
+            eat_health_per_unit: 2 * QTY_SCALE,
+            epsilon_permille: 10,
         }
     }
 }

@@ -1,11 +1,15 @@
-//! 法則グラフ（P0 最小版）。
+//! 法則グラフ（M1 版）。
 //!
 //! resource は primary 5 種 + それぞれの劣化先（廃棄物）5 種の計 10 種。
 //! - 劣化（g 減衰）は自発変換: primary i → waste i（組成同一・g 低下・1:1）
 //! - 環境変換（光合成）: waste i → primary i（g 増分の合計 ≤ Φ/月）
 //!
+//! skill は primary ごとに 2 種（計 10 種）:
+//! - harvest_i: strength を消費して環境から primary i を採取（獲得量はストック残量依存）
+//! - eat_i:     primary i を health + waste i に変換（食文化 → docs/design/03-skills.md）
+//!
 //! 組成が同一ペア間の 1:1 変換なので、組成保存は構造的に厳密。
-//! M1 でここを本物の手続き的化学（invoke レシピ・食事ペア・harvest）に拡張する。
+//! M2+ でここを本物の手続き的化学（craft 連鎖・深い skill）に拡張する。
 
 use crate::rng::{hash2, hash3};
 use crate::{Qty, ResourceId, QTY_SCALE};
@@ -14,6 +18,9 @@ use std::collections::BTreeMap;
 pub const COMP_DIM: usize = 3;
 pub const N_PRIMARY: usize = 5;
 pub const N_RESOURCES: usize = N_PRIMARY * 2;
+pub const N_SKILLS: usize = N_PRIMARY * 2;
+
+pub type SkillId = u64;
 
 #[derive(Clone, Debug)]
 pub struct ResourceSpec {
@@ -29,6 +36,14 @@ pub struct ResourceSpec {
     pub decay_into: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SkillKind {
+    /// 環境から primary i を採取する
+    Harvest(usize),
+    /// primary i を食べて health に変換する（waste i を産出）
+    Eat(usize),
+}
+
 #[derive(Clone, Debug)]
 pub struct LawGraph {
     /// 内部 index（0..N_PRIMARY が primary、N_PRIMARY.. が対応する廃棄物）
@@ -37,6 +52,10 @@ pub struct LawGraph {
     pub id_of_index: Vec<ResourceId>,
     /// 公開 resource-id → 内部 index
     pub index_of_id: BTreeMap<ResourceId, usize>,
+    /// skill（内部 index: 0..N_PRIMARY が harvest_i、N_PRIMARY.. が eat_i）
+    pub skills: Vec<SkillKind>,
+    pub skill_id_of_index: Vec<SkillId>,
+    pub skill_index_of_id: BTreeMap<SkillId, usize>,
 }
 
 impl LawGraph {
@@ -72,26 +91,25 @@ impl LawGraph {
             });
         }
 
-        // 公開 id のシャッフル: ハッシュ由来の非連番 id（衝突時はリハッシュ）
-        let mut id_of_index = Vec::with_capacity(N_RESOURCES);
-        let mut index_of_id = BTreeMap::new();
-        for i in 0..N_RESOURCES {
-            let mut salt = 0u64;
-            let id = loop {
-                let cand = hash3(seed, 0x1D5, (i as u64) << 8 | salt);
-                if cand != 0 && !index_of_id.contains_key(&cand) {
-                    break cand;
-                }
-                salt += 1;
-            };
-            id_of_index.push(id);
-            index_of_id.insert(id, i);
+        let (id_of_index, index_of_id) = shuffle_ids(seed, 0x1D5, N_RESOURCES);
+
+        // skill: harvest_i (0..N_PRIMARY), eat_i (N_PRIMARY..)
+        let mut skills = Vec::with_capacity(N_SKILLS);
+        for i in 0..N_PRIMARY {
+            skills.push(SkillKind::Harvest(i));
         }
+        for i in 0..N_PRIMARY {
+            skills.push(SkillKind::Eat(i));
+        }
+        let (skill_id_of_index, skill_index_of_id) = shuffle_ids(seed, 0x51C1, N_SKILLS);
 
         LawGraph {
             specs,
             id_of_index,
             index_of_id,
+            skills,
+            skill_id_of_index,
+            skill_index_of_id,
         }
     }
 
@@ -101,4 +119,30 @@ impl LawGraph {
         let w = &self.specs[p.decay_into];
         (p.g - w.g) / QTY_SCALE.max(1)
     }
+
+    /// 食事 1.000 単位あたりの自由エネルギー差 Δg（消費計測 → docs/design/07-scoring.md）
+    pub fn eat_delta_g(&self, primary: usize) -> Qty {
+        let p = &self.specs[primary];
+        let w = &self.specs[p.decay_into];
+        p.g - w.g
+    }
+}
+
+/// ハッシュ由来の非連番 id を n 個生成する（衝突時はリハッシュ）
+fn shuffle_ids(seed: u64, tag: u64, n: usize) -> (Vec<u64>, BTreeMap<u64, usize>) {
+    let mut id_of_index = Vec::with_capacity(n);
+    let mut index_of_id = BTreeMap::new();
+    for i in 0..n {
+        let mut salt = 0u64;
+        let id = loop {
+            let cand = hash3(seed, tag, (i as u64) << 8 | salt);
+            if cand != 0 && !index_of_id.contains_key(&cand) {
+                break cand;
+            }
+            salt += 1;
+        };
+        id_of_index.push(id);
+        index_of_id.insert(id, i);
+    }
+    (id_of_index, index_of_id)
 }
