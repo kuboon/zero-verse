@@ -95,12 +95,44 @@ fn cmd_m2(args: &[String]) {
     }
 }
 
+fn cmd_m3(args: &[String]) {
+    use zeroverse_core::scenarios::run_m3;
+    let seeds = parse_flag(args, "--seeds", 3);
+    let years = parse_flag(args, "--years", 20) as u32;
+    let params = WorldParams {
+        re_permille: 20,
+        ..Default::default()
+    };
+
+    println!("M3: skill の売買は自発するか（教師 2 + 徒弟 4・{years} 年・RE 20‰）");
+    println!(
+        "{:>6} {:>8} {:>10} {:>10} {:>6} {:>4}",
+        "seed", "戦略", "習得", "月払い回数", "RE", "生存"
+    );
+    for seed in 1..=seeds {
+        for (name, secret) in [("open", false), ("secret", true)] {
+            let r = run_m3(seed, secret, years, params.clone());
+            println!(
+                "{:>6} {:>8} {:>7}/{} {:>10} {:>6} {:>4}",
+                seed,
+                name,
+                r.apprentices_with_skill,
+                r.apprentices_total,
+                r.paid_teach_transfers,
+                r.re_acquisitions,
+                r.alive
+            );
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("run") => cmd_run(&args),
         Some("m1") => cmd_m1(&args),
         Some("m2") => cmd_m2(&args),
+        Some("m3") => cmd_m3(&args),
         _ => {
             eprintln!("usage: zeroverse run [--seed N] [--humans N] [--years N]");
             eprintln!("       zeroverse m1  [--seeds N] [--pairs N] [--years N]");

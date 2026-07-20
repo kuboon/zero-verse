@@ -30,6 +30,8 @@ pub struct Human {
     pub inventory: BTreeMap<usize, Qty>,
     /// skill 内部 index → 熟練度
     pub skills: BTreeMap<usize, Qty>,
+    /// 学習中の skill → 進捗ポイント（完了で skills へ → docs/design/03-skills.md）
+    pub learning: BTreeMap<usize, u64>,
     pub acquaintances: BTreeSet<HumanId>,
     /// 生涯消費（食事の Δg 総和の生の積、1/1000^2 スケール → docs/design/07-scoring.md）
     pub consumed_dg: u128,
@@ -67,6 +69,10 @@ pub struct World {
     pub last_quotes: Vec<(HumanId, usize, Qty, usize, Qty)>,
     /// 約定回数の累計（内部 index → 回数。M2 の取引集中の計測用）
     pub trade_volume: BTreeMap<usize, u64>,
+    /// if-taught-me 条件で実行された支払いの累計回数（M3 の計測用）
+    pub paid_teach_transfers: u64,
+    /// リバースエンジニアリングによる skill 獲得の累計回数（M3 の計測用）
+    pub re_acquisitions: u64,
 }
 
 impl World {
@@ -131,6 +137,8 @@ impl World {
             f.write_u64(idx as u64);
             f.write_u64(n);
         }
+        f.write_u64(self.paid_teach_transfers);
+        f.write_u64(self.re_acquisitions);
         f.write_u64(self.humans.len() as u64);
         for h in self.humans.values() {
             f.write_u64(h.id);
@@ -154,6 +162,11 @@ impl World {
             for (&idx, &prof) in &h.skills {
                 f.write_u64(idx as u64);
                 f.write_u64(prof);
+            }
+            f.write_u64(h.learning.len() as u64);
+            for (&idx, &p) in &h.learning {
+                f.write_u64(idx as u64);
+                f.write_u64(p);
             }
             f.write_u64(h.acquaintances.len() as u64);
             for &a in &h.acquaintances {
@@ -221,6 +234,15 @@ fn hash_event(f: &mut Fnv1a, ev: &Event) {
             f.write_u64(gave.1);
             f.write_u64(got.0);
             f.write_u64(got.1);
+        }
+        Event::TeachProgressed { partner, skill } => {
+            f.write_u8(7);
+            f.write_u64(*partner);
+            f.write_u64(*skill);
+        }
+        Event::SkillAcquired(s) => {
+            f.write_u8(8);
+            f.write_u64(*s);
         }
         Event::ActionFailed => f.write_u8(5),
     }

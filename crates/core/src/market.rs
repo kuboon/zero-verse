@@ -41,7 +41,10 @@ impl World {
                 want_resource,
                 want_amount,
                 partial,
-            } = order;
+            } = order
+            else {
+                continue; // conditional-give は resolve_conditional_gives で処理済み
+            };
             let (Some(&gi), Some(&wi)) = (
                 self.laws.index_of_id.get(&give_resource),
                 self.laws.index_of_id.get(&want_resource),
