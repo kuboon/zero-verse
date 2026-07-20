@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      # 決定論ハーネス: 同一シードの 2 ランで state hash が一致すること
+      # （in-process の determinism テストに加え、プロセス境界を跨いでも検証する）
+      - name: determinism across processes
+        run: |
+          a="$(cargo run -q -p zeroverse-cli -- run --seed 42 --humans 20 --years 100 | grep 'state hash')"
+          b="$(cargo run -q -p zeroverse-cli -- run --seed 42 --humans 20 --years 100 | grep 'state hash')"
+          echo "$a"
+          echo "$b"
+          test "$a" = "$b"
