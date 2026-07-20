@@ -1,12 +1,39 @@
 //! Brain 抽象。
 //!
-//! P0 ではネイティブ trait。WASM Component（wit/world.wit）実行系は後続フェーズで
+//! P0/M1 ではネイティブ trait。WASM Component（wit/world.wit）実行系は後続フェーズで
 //! この trait の実装として載せる（fuel 計量・部分実行は WASM 側で処理し、
 //! エンジンには「commit 済み宣言の列」として渡る — Decision がその列に相当する）。
 
+use crate::laws::SkillId;
 use crate::{HumanId, Qty, ResourceId};
 
-/// snapshot（P0 最小版）。WIT の observation.snapshot のサブセット。
+/// 先月自分に起きたこと（WIT の observation.event に相当。公開 id で表現）
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Event {
+    ReceivedTransfer {
+        from: HumanId,
+        resource: ResourceId,
+        amount: Qty,
+    },
+    /// ε 由来の偶発的出会い
+    Encountered(HumanId),
+    /// 知人の死のみ通知
+    SomeoneDied(HumanId),
+    /// 自分の invoke の結果（食事ブートストラップの搬送路。
+    /// 6歳継承直後の brain はここから「どの resource × skill が食事か」を学ぶ。
+    /// TODO: wit/world.wit の event にはまだ無い。wasm 統合時に同期する）
+    InvokeResult {
+        skill: SkillId,
+        consumed: Vec<(ResourceId, Qty)>,
+        produced: Vec<(ResourceId, Qty)>,
+        /// health の増分（1/1000）
+        health_gain: Qty,
+    },
+    /// 失敗理由は返さない
+    ActionFailed,
+}
+
+/// snapshot（M1 版）。WIT の observation.snapshot のサブセット。
 #[derive(Clone, Debug)]
 pub struct Snapshot {
     pub now: u32,
@@ -15,10 +42,15 @@ pub struct Snapshot {
     pub id: HumanId,
     pub age_months: u32,
     pub health: Qty,
+    pub strength: Qty,
     pub space_used: Qty,
     pub space_free: Qty,
     /// 公開 resource-id で表現した保有
     pub resources: Vec<(ResourceId, Qty)>,
+    /// 公開 skill-id と熟練度
+    pub skills: Vec<(SkillId, Qty)>,
+    pub acquaintances: Vec<HumanId>,
+    pub events: Vec<Event>,
 }
 
 /// commit 済みの宣言列（WIT の commit.push-act の積み上げ結果に相当）
@@ -26,7 +58,7 @@ pub struct Snapshot {
 pub enum Act {
     Invoke {
         inputs: Vec<(ResourceId, Qty)>,
-        using_skills: Vec<u64>,
+        using_skills: Vec<SkillId>,
     },
     Give {
         to: HumanId,
@@ -51,7 +83,7 @@ pub trait Brain {
     fn decide(&mut self, snap: &Snapshot) -> Decision;
 }
 
-/// P0 のダミー brain。何もしない（PLAN の P0 完了条件用）。
+/// P0 のダミー brain。何もしない。
 pub struct IdleBrain;
 
 impl Brain for IdleBrain {
