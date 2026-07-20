@@ -218,12 +218,12 @@ impl WasmBrain {
             acquaintances: snap
                 .acquaintances
                 .iter()
-                .map(|&id| observation::Acquaintance {
+                .map(|&(id, intimacy)| observation::Acquaintance {
                     id,
-                    // M4 で実装（apparent-age・intimacy）。それまではスタブ
+                    // apparent-age / last-interaction はエンジン側未実装のスタブ
                     apparent_age: 0,
                     alive: true,
-                    intimacy: 0,
+                    intimacy,
                     last_interaction: None,
                 })
                 .collect(),
@@ -268,6 +268,7 @@ impl WasmBrain {
                         })
                     }
                     E::SkillAcquired(s) => observation::Event::SkillAcquired(*s),
+                    E::ChildBorn(c) => observation::Event::ChildBorn(*c),
                     E::ActionFailed => {
                         observation::Event::ActionFailed(observation::ActionKind::Invoke)
                     }

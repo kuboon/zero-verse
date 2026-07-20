@@ -68,6 +68,22 @@ pub struct WorldParams {
     pub learn_initial_prof: Qty,
     /// リバースエンジニアリング確率（‰/月。産出 resource が板で売られている skill が対象）
     pub re_permille: u64,
+    /// 親密度の月次減衰（‰。公理 10 の「stats から生じる増減」の M4 仮実装）
+    pub intimacy_decay_permille: u64,
+    /// 当事者間の action 1 回あたりの親密度増分
+    pub intimacy_per_interaction: Qty,
+    /// 出生時の母子ペアの初期親密度
+    pub mother_child_intimacy: Qty,
+    /// 刷り込み閾値: fertility 窓が開く前にこれを超えたペアは conceive 対象外（Westermarck）
+    pub imprint_threshold: Qty,
+    /// conceive 条件: 相対親密度の相互閾値（‰）
+    pub conceive_rel_permille: u64,
+    /// fertility 窓（月齢）
+    pub puberty_months: u32,
+    pub menopause_months: u32,
+    /// 妊娠期間と出産の health コスト（女性が負う）
+    pub gestation_months: u32,
+    pub birth_health_cost: Qty,
 }
 
 impl Default for WorldParams {
@@ -93,6 +109,15 @@ impl Default for WorldParams {
             teach_progress_needed: 360, // 教師 100%・cognition 60% で 6 ヶ月
             learn_initial_prof: 50 * QTY_SCALE,
             re_permille: 2,
+            intimacy_decay_permille: 20,
+            intimacy_per_interaction: 2 * QTY_SCALE,
+            mother_child_intimacy: 50 * QTY_SCALE,
+            imprint_threshold: 10 * QTY_SCALE,
+            conceive_rel_permille: 500,
+            puberty_months: 15 * 12,
+            menopause_months: 45 * 12,
+            gestation_months: 9,
+            birth_health_cost: 10 * QTY_SCALE,
         }
     }
 }

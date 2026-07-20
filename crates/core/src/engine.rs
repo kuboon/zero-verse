@@ -54,6 +54,7 @@ impl World {
                         cognition: 60 * QTY_SCALE,
                         fertility: 50 * QTY_SCALE,
                     },
+                    pregnant: None,
                     inventory,
                     skills: BTreeMap::new(),
                     learning: BTreeMap::new(),
@@ -78,6 +79,10 @@ impl World {
             trade_volume: BTreeMap::new(),
             paid_teach_transfers: 0,
             re_acquisitions: 0,
+            intimacy: BTreeMap::new(),
+            imprinted: Default::default(),
+            parentage: BTreeMap::new(),
+            births: 0,
         }
     }
 
@@ -217,7 +222,11 @@ impl World {
                     .iter()
                     .map(|(&idx, &prof)| (self.laws.skill_id_of_index[idx], prof))
                     .collect(),
-                acquaintances: human.acquaintances.iter().copied().collect(),
+                acquaintances: human
+                    .acquaintances
+                    .iter()
+                    .map(|&a| (a, self.intimacy_of(hid, a)))
+                    .collect(),
                 events,
                 market: self
                     .last_quotes
@@ -297,6 +306,14 @@ impl World {
         self.resolve_board(month, limit_orders);
         // 4e. リバースエンジニアリング（板での販売が skill を確率的に漏らす）
         self.resolve_reverse_engineering(month);
+        // 4f. 親密度の月次減衰（公理 10。増加は相互作用時にインライン）
+        self.decay_intimacy(month);
+        // 4g. Westermarck 刷り込み（fertility 窓が開く前に親密になったペアを除外）
+        self.update_imprinting();
+        // 4h. conceive の自動発生（相対親密度の相互条件 → docs/design/05-kinship.md）
+        self.resolve_conception(month);
+        // 4i. 出産
+        self.resolve_births(month);
 
         // 5. upkeep: health 自然減 + 占有維持費 → strength 回復 → 加齢 → 死
         let mut dead: Vec<HumanId> = Vec::new();
@@ -316,6 +333,14 @@ impl World {
             human.stats.strength =
                 (human.stats.strength + params.strength_regen_per_month).min(strength_cap);
             human.age_months += 1;
+            // fertility の年齢窓（思春期に開き、閉経で閉じる → docs/design/human.md）
+            human.stats.fertility = if human.age_months >= params.puberty_months
+                && human.age_months < params.menopause_months
+            {
+                50 * QTY_SCALE
+            } else {
+                0
+            };
             // 能力曲線（M1 仮): 加齢で緩やかに減衰
             if human.age_months > 40 * 12 {
                 human.stats.strength = human.stats.strength.saturating_sub(50);
@@ -347,6 +372,204 @@ impl World {
     pub(crate) fn push_event(&mut self, hid: HumanId, ev: Event) {
         if let Some(h) = self.humans.get_mut(&hid) {
             h.pending_events.push(ev);
+        }
+    }
+
+    fn pair_key(a: HumanId, b: HumanId) -> (HumanId, HumanId) {
+        (a.min(b), a.max(b))
+    }
+
+    pub fn intimacy_of(&self, a: HumanId, b: HumanId) -> Qty {
+        self.intimacy
+            .get(&Self::pair_key(a, b))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// 当事者間の action 1 回ぶんの親密度増加（give / teach / 約定 / introduce）
+    pub(crate) fn bump_intimacy(&mut self, a: HumanId, b: HumanId) {
+        if a == b {
+            return;
+        }
+        let add = self.params.intimacy_per_interaction;
+        *self.intimacy.entry(Self::pair_key(a, b)).or_insert(0) += add;
+    }
+
+    /// 親密度の月次減衰と死者ペアの掃除
+    fn decay_intimacy(&mut self, month: u32) {
+        let lam = self.params.intimacy_decay_permille;
+        let seed = self.seed;
+        let alive = |id: HumanId, w: &BTreeMap<HumanId, Human>| w.contains_key(&id);
+        let humans = &self.humans;
+        self.intimacy.retain(|&(a, b), v| {
+            if !alive(a, humans) || !alive(b, humans) {
+                return false;
+            }
+            let h = hash4(seed, 0x1AC4, month as u64, a ^ b.rotate_left(32));
+            let loss = div_round_stochastic(*v as u128 * lam as u128, 1000, h).min(*v);
+            *v -= loss;
+            *v > 0
+        });
+    }
+
+    /// fertility 窓が開く前に閾値を超えたペアは刷り込み（conceive 永久対象外）
+    fn update_imprinting(&mut self) {
+        let threshold = self.params.imprint_threshold;
+        let puberty = self.params.puberty_months;
+        let mut newly: Vec<(HumanId, HumanId)> = Vec::new();
+        for (&(a, b), &v) in &self.intimacy {
+            if v < threshold || self.imprinted.contains(&(a, b)) {
+                continue;
+            }
+            let minor = |id: HumanId| {
+                self.humans
+                    .get(&id)
+                    .map(|h| h.age_months < puberty)
+                    .unwrap_or(false)
+            };
+            if minor(a) || minor(b) {
+                newly.push((a, b));
+            }
+        }
+        self.imprinted.extend(newly);
+    }
+
+    /// 相対親密度 = self の全知人への親密度合計に占める相手の割合（‰）
+    fn relative_intimacy_permille(&self, from: HumanId, to: HumanId) -> u64 {
+        let Some(h) = self.humans.get(&from) else {
+            return 0;
+        };
+        let total: u128 = h
+            .acquaintances
+            .iter()
+            .map(|&a| self.intimacy_of(from, a) as u128)
+            .sum();
+        if total == 0 {
+            return 0;
+        }
+        (self.intimacy_of(from, to) as u128 * 1000 / total) as u64
+    }
+
+    /// conceive の自動発生: 相対親密度が相互に閾値超 ＋ 異性 ＋ 双方 fertility 窓内
+    /// ＋ 非刷り込み ＋ 女性が非妊娠。条件を満たす相手が複数なら相互相対親密度の
+    /// 最小値が最大のペア（tie は id）で決定論的に選ぶ。
+    fn resolve_conception(&mut self, month: u32) {
+        let threshold = self.params.conceive_rel_permille;
+        let human_ids: Vec<HumanId> = self.humans.keys().copied().collect();
+        for &f in &human_ids {
+            let Some(fh) = self.humans.get(&f) else {
+                continue;
+            };
+            if fh.sex != Sex::Female || fh.pregnant.is_some() || fh.stats.fertility == 0 {
+                continue;
+            }
+            let candidates: Vec<HumanId> = fh.acquaintances.iter().copied().collect();
+            let mut best: Option<(u64, HumanId)> = None;
+            for m in candidates {
+                let Some(mh) = self.humans.get(&m) else {
+                    continue;
+                };
+                if mh.sex != Sex::Male || mh.stats.fertility == 0 {
+                    continue;
+                }
+                if self.imprinted.contains(&Self::pair_key(f, m)) {
+                    continue;
+                }
+                let a = self.relative_intimacy_permille(f, m);
+                let b = self.relative_intimacy_permille(m, f);
+                let mutual = a.min(b);
+                if mutual > threshold && best.map(|(s, _)| mutual > s).unwrap_or(true) {
+                    best = Some((mutual, m));
+                }
+            }
+            if let Some((_, father)) = best {
+                let due = month + self.params.gestation_months;
+                self.humans.get_mut(&f).unwrap().pregnant = Some((due, father));
+            }
+        }
+    }
+
+    /// 出産: 母にのみ child-born。父には 0 歳の知人が現れるだけ（通知なし）。
+    fn resolve_births(&mut self, month: u32) {
+        let due_now: Vec<(HumanId, HumanId)> = self
+            .humans
+            .iter()
+            .filter_map(|(&m, h)| match h.pregnant {
+                Some((due, father)) if due <= month => Some((m, father)),
+                _ => None,
+            })
+            .collect();
+        for (mother, father) in due_now {
+            // 子の id も非連番
+            let mut salt = 0u64;
+            let child: HumanId = loop {
+                let cand = hash4(self.seed, 0xB1B7, month as u64, mother ^ salt);
+                if cand != 0
+                    && !self.humans.contains_key(&cand)
+                    && !self.parentage.contains_key(&cand)
+                {
+                    break cand;
+                }
+                salt += 1;
+            };
+            let sex = if hash4(self.seed, 0x5EC5, month as u64, child) & 1 == 0 {
+                Sex::Female
+            } else {
+                Sex::Male
+            };
+            // 生得付与: 母の食事 skill（#12 仮決定: 食文化は母から）
+            let inherited_eats: Vec<(usize, Qty)> = self
+                .humans
+                .get(&mother)
+                .map(|h| {
+                    h.skills
+                        .iter()
+                        .filter(|(&k, _)| matches!(self.laws.skills[k], SkillKind::Eat(_)))
+                        .map(|(&k, &p)| (k, p))
+                        .collect()
+                })
+                .unwrap_or_default();
+            self.humans.insert(
+                child,
+                Human {
+                    id: child,
+                    sex,
+                    age_months: 0,
+                    stats: Stats {
+                        health: 50 * QTY_SCALE,
+                        strength: 10 * QTY_SCALE,
+                        cognition: 80 * QTY_SCALE,
+                        fertility: 0,
+                    },
+                    pregnant: None,
+                    inventory: BTreeMap::new(),
+                    skills: inherited_eats.into_iter().collect(),
+                    learning: BTreeMap::new(),
+                    acquaintances: Default::default(),
+                    consumed_dg: 0,
+                    pending_events: Vec::new(),
+                    memory: Vec::new(),
+                },
+            );
+            self.parentage.insert(child, (mother, father));
+            self.births += 1;
+            // 出産コストは母が負う
+            if let Some(mh) = self.humans.get_mut(&mother) {
+                mh.pregnant = None;
+                mh.stats.health = mh
+                    .stats
+                    .health
+                    .saturating_sub(self.params.birth_health_cost);
+            }
+            // 母子: 高い初期親密度 + child-born。父子: 知人になるだけ（父性不確実性）
+            self.add_acquaintance(mother, child);
+            self.add_acquaintance(father, child);
+            let init = self.params.mother_child_intimacy;
+            *self
+                .intimacy
+                .entry(Self::pair_key(mother, child))
+                .or_insert(0) += init;
+            self.push_event(mother, Event::ChildBorn(child));
         }
     }
 
@@ -429,8 +652,9 @@ impl World {
             if done {
                 self.push_event(student, Event::SkillAcquired(skill_pub));
             }
-            // 教育も相互作用: 互いを知人にする
+            // 教育も相互作用: 互いを知人にし、親密度を上げる
             self.add_acquaintance(teacher, student);
+            self.bump_intimacy(teacher, student);
             taught.insert((teacher, student, k));
         }
         taught
@@ -598,8 +822,9 @@ impl World {
                         amount: amt,
                     },
                 );
-                // 贈与は互いを知人にする（最小の相互作用チャネル）
+                // 贈与は互いを知人にし、親密度を上げる（最小の相互作用チャネル）
                 self.add_acquaintance(hid, to);
+                self.bump_intimacy(hid, to);
             }
             Act::Invoke {
                 inputs,

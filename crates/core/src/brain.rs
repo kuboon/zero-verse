@@ -40,6 +40,8 @@ pub enum Event {
     TeachProgressed { partner: HumanId, skill: SkillId },
     /// skill を獲得した（教育の完了、またはリバースエンジニアリング）
     SkillAcquired(SkillId),
+    /// 出産。**母にのみ届く**。父には 0 歳の知人が現れるだけ（docs/design/05-kinship.md）
+    ChildBorn(HumanId),
     /// 失敗理由は返さない
     ActionFailed,
 }
@@ -92,7 +94,8 @@ pub struct Snapshot {
     pub resources: Vec<(ResourceId, Qty)>,
     /// 公開 skill-id と熟練度
     pub skills: Vec<(SkillId, Qty)>,
-    pub acquaintances: Vec<HumanId>,
+    /// 知人と親密度（両者から同じ値が見える → docs/design/human.md）
+    pub acquaintances: Vec<(HumanId, Qty)>,
     pub events: Vec<Event>,
     /// 先月の板の公開気配（記名）
     pub market: Vec<BoardQuote>,

@@ -26,6 +26,8 @@ pub struct Human {
     pub sex: Sex,
     pub age_months: u32,
     pub stats: Stats,
+    /// 妊娠中なら (出産予定月, 父)。女性のみ
+    pub pregnant: Option<(u32, HumanId)>,
     /// key は法則グラフの内部 index（公開 id への変換は snapshot 生成時のみ）
     pub inventory: BTreeMap<usize, Qty>,
     /// skill 内部 index → 熟練度
@@ -73,6 +75,14 @@ pub struct World {
     pub paid_teach_transfers: u64,
     /// リバースエンジニアリングによる skill 獲得の累計回数（M3 の計測用）
     pub re_acquisitions: u64,
+    /// 親密度（公理 10）。key は (min, max) の順序付きペア。当事者だけに可視
+    pub intimacy: BTreeMap<(HumanId, HumanId), Qty>,
+    /// Westermarck 刷り込みペア（conceive 対象外。→ docs/design/05-kinship.md）
+    pub imprinted: std::collections::BTreeSet<(HumanId, HumanId)>,
+    /// 血縁台帳: child → (mother, father)。world 内部とメタ層（採点・継承）専用。
+    /// brain には一切露出しない（公理 8: 血縁は観測できない）
+    pub parentage: BTreeMap<HumanId, (HumanId, HumanId)>,
+    pub births: u64,
 }
 
 impl World {
@@ -139,6 +149,21 @@ impl World {
         }
         f.write_u64(self.paid_teach_transfers);
         f.write_u64(self.re_acquisitions);
+        f.write_u64(self.births);
+        for (&(a, b), &v) in &self.intimacy {
+            f.write_u64(a);
+            f.write_u64(b);
+            f.write_u64(v);
+        }
+        for &(a, b) in &self.imprinted {
+            f.write_u64(a);
+            f.write_u64(b);
+        }
+        for (&c, &(m, fa)) in &self.parentage {
+            f.write_u64(c);
+            f.write_u64(m);
+            f.write_u64(fa);
+        }
         f.write_u64(self.humans.len() as u64);
         for h in self.humans.values() {
             f.write_u64(h.id);
@@ -147,6 +172,14 @@ impl World {
                 Sex::Male => 1,
             });
             f.write_u32(h.age_months);
+            match h.pregnant {
+                None => f.write_u8(0),
+                Some((due, father)) => {
+                    f.write_u8(1);
+                    f.write_u32(due);
+                    f.write_u64(father);
+                }
+            }
             f.write_u64(h.stats.health);
             f.write_u64(h.stats.strength);
             f.write_u64(h.stats.cognition);
@@ -243,6 +276,10 @@ fn hash_event(f: &mut Fnv1a, ev: &Event) {
         Event::SkillAcquired(s) => {
             f.write_u8(8);
             f.write_u64(*s);
+        }
+        Event::ChildBorn(c) => {
+            f.write_u8(9);
+            f.write_u64(*c);
         }
         Event::ActionFailed => f.write_u8(5),
     }
