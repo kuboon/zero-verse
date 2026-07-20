@@ -13,6 +13,7 @@
 pub mod brain;
 pub mod engine;
 pub mod laws;
+pub mod market;
 pub mod rng;
 pub mod scenarios;
 pub mod state;
