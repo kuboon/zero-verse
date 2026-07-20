@@ -3,7 +3,7 @@
 
 # WIT パッケージ全体像
 
-brain と engine の接続仕様（v0.1）。**型の定義は仕様を詰めやすいようトピックごとの md に分散してある**（下のマップ参照）。本書はパッケージの骨格、分散マップ、不変の原則を持つ。実装時に型は変わってよいが、「不変の原則」は変えない。
+brain と engine の接続仕様（v0.1）。**確定版は [`wit/world.wit`](https://github.com/kuboon/zero-verse/blob/main/wit/world.wit)**（P0-1 で起こした。以後の型変更は wit/ と本 md 群の両方に反映する）。**型の定義は仕様を詰めやすいようトピックごとの md に分散してある**（下のマップ参照）。本書はパッケージの骨格、分散マップ、不変の原則を持つ。実装時に型は変わってよいが、「不変の原則」は変えない。
 
 ## 方針
 
@@ -68,16 +68,18 @@ record world-config {
 }
 ```
 
-## 未定義 record 一覧（P0-1 で確定する）
+## 旧・未定義 record（P0-1 で仮確定済み）
 
-| record | 定義場所（詰める場所） |
+すべて `wit/world.wit` で仮確定した。形を変えたくなったら wit/ を直してここに追記する。
+
+| record | 仮確定の内容 |
 | --- | --- |
-| `board-quote` | [04-market.md](./04-market.md) |
-| `trade-info` / `public-trade` | [04-market.md](./04-market.md) |
-| `teach-info` | [03-skills.md](./03-skills.md) |
-| `proposal` | [06-communication.md](./06-communication.md)（要否から再検討） |
-| `action-kind` | [human.md](./human.md) |
-| `give-args` | [02-resources.md](./02-resources.md)（草案の抜け） |
+| `board-quote` | 記名の気配（seller + give/want ペア） |
+| `trade-info` / `public-trade` | 相手 + 渡した/受けた stack（public-trade は月付き） |
+| `teach-info` | 相手 + skill。**残り月数は開示しない**（持ち逃げ読みを防ぐ） |
+| `proposal` | **削除**（無料シグナル化するため → [06-communication.md](./06-communication.md)） |
+| `action-kind` | act 種別のみの enum |
+| `give-args` | `{ to: human-id, stack: resource-stack }` |
 
 ## 不変の原則（型を変えても守る）
 

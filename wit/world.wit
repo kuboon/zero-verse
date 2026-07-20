@@ -1,0 +1,226 @@
+// zeroverse brain ⇔ engine interface (P0-1 確定版 v0.1)
+//
+// 設計の背景は docs/design/ を参照。特に:
+//   - docs/design/09-wit-draft.md  … 分散マップと不変の原則
+//   - docs/design/human.md         … observation / action / commit
+//   - docs/design/02-resources.md  … resource / invoke
+//   - docs/design/04-market.md     … standing order / 板
+//
+// 不変の原則（型を変えても守る）:
+//   1. decide はステートレス。月を跨ぐ状態は memory blob のみ。出力は commit への積み上げ。
+//   2. 呼び出しごとに WASM インスタンスを新規化する。
+//   3. ABI に float を入れない。wasi をリンクしない。乱数は snapshot.rand で渡す。
+//   4. snapshot に入れた情報は無料の全知になる。「自分の内側は全部見える、他人は行動の痕跡だけ」。
+//   5. fuel 消費は health の減少に写像する。memory 上限は年齢の関数。
+
+package zeroverse:world@0.1.0;
+
+interface types {
+  type human-id = u64;     // 連番にしない（出生順 = 血縁の手がかり）
+  type resource-id = u64;  // world 生成時にシャッフル
+  type skill-id = u64;     // world 生成時にシャッフル
+  type qty = u64;          // 固定小数点 1/1000
+  type month = u32;        // world 開始からの通算月
+
+  record resource-stack {
+    resource: resource-id,
+    amount: qty,
+  }
+
+  enum sex { female, male }   // self-view にのみ含まれる
+
+  enum stat-kind {
+    health,     // 生存。0 で死
+    strength,   // 身体作業の量
+    cognition,  // 学習と発見
+    fertility,  // conceive 自動発生の条件（アクションには現れない）
+  }
+
+  record stat {
+    kind: stat-kind,
+    value: qty,   // 0 〜 100.000
+  }
+
+  // brain が知ってよい world パラメータのみ。法則グラフに関する情報は一切含まれない。
+  record world-config {
+    months-per-year: u32,      // 12
+    max-lifespan-months: u32,
+    act-slots-base: u32,
+    qty-scale: u32,            // 1000（qty の刻みの逆数）
+    total-space: qty,          // 総空間 S
+    upkeep-per-volume: qty,    // 占有維持費 κ（保管体積あたりの health/月）
+    fuel-per-health: u64,      // 思考コスト換算（fuel / health 0.001）
+    acquaintance-cap: u32,     // 知人リスト上限（P0-1 仮決定: 定数）
+  }
+}
+
+interface action {
+  use types.{human-id, resource-id, skill-id, qty, resource-stack};
+
+  record invoke-args {
+    inputs: list<resource-stack>,  // 組み合わせ自由。レシピ ID は存在しない
+    using-skills: list<skill-id>,
+  }
+
+  record give-args { to: human-id, stack: resource-stack }
+  record teach-args { student: human-id, skill: skill-id }
+  record learn-args { teacher: human-id, skill: skill-id }
+  record introduce-args { to: human-id, subject: human-id }
+
+  variant act {
+    invoke(invoke-args),      // skill の発動。harvest・食事・train・変換をすべて含む
+    give(give-args),          // 一方的贈与
+    discard(resource-stack),  // 環境への廃棄。占有空間を空ける
+    teach(teach-args),
+    learn(learn-args),
+    introduce(introduce-args),
+    idle,
+  }
+
+  record limit-order {
+    give-resource: resource-id,
+    give-amount: qty,
+    want-resource: resource-id,
+    want-amount: qty,      // 価格 = want/give
+    partial: bool,
+  }
+
+  variant give-condition {
+    if-received(resource-stack),   // 相対交換（OTC）
+    if-taught-me(skill-id),        // 徒弟制の分割払いを月単位でアトミックにする
+    unconditional-scheduled,
+    // 検討中: if-intimacy（担保型の約束）→ docs/design/06-communication.md、未決 #7
+  }
+
+  record cond-give {
+    to: human-id,
+    stack: resource-stack,
+    condition: give-condition,
+  }
+
+  variant standing-order {
+    limit-order(limit-order),
+    conditional-give(cond-give),
+  }
+}
+
+interface observation {
+  use types.{human-id, resource-id, skill-id, qty, month, resource-stack, sex, stat};
+
+  enum action-kind { invoke, give, discard, teach, learn, introduce, idle }
+
+  record skill-view {
+    skill: skill-id,
+    proficiency: qty,
+    // この skill が何をアンロックするかは書かない。
+    // available-actions との差分から brain が推測する
+  }
+
+  record self-view {
+    id: human-id,
+    age-months: u32,
+    sex: sex,                       // 本人以外には不可視
+    stats: list<stat>,
+    resources: list<resource-stack>,
+    space-used: qty,                // 占有空間（身体 + 保有体積）
+    space-free: qty,                // world の未占有空間（公共情報）
+    skills: list<skill-view>,
+    available-actions: list<action-kind>,
+    fuel-budget: u64,               // 今月の思考予算（health から算出）
+    memory-limit: u32,              // 今月の memory 上限バイト（年齢の関数）
+  }
+
+  record acquaintance {
+    id: human-id,
+    apparent-age: u32,        // 見かけの年齢（年単位。実年齢と stats から算出）
+    alive: bool,
+    intimacy: qty,            // 親密度。両者から同じ値が見える
+    last-interaction: option<month>,
+  }
+
+  record transfer-info { from: human-id, stack: resource-stack }
+  record trade-info { counterparty: human-id, gave: resource-stack, got: resource-stack }
+  record teach-info { partner: human-id, skill: skill-id }  // 残り月数は開示しない
+  record introduction-info { via: human-id, subject: human-id }
+
+  variant event {
+    received-transfer(transfer-info),
+    trade-executed(trade-info),
+    teach-progressed(teach-info),
+    skill-acquired(skill-id),
+    introduced(introduction-info),
+    encountered(human-id),          // ε 由来の偶発的出会い
+    child-born(human-id),           // 出産。母にのみ届く
+    someone-died(human-id),         // 知人の死のみ通知
+    action-failed(action-kind),     // 失敗理由は返さない
+    // proposal-received は P0-1 で削除（無料シグナル化するため。
+    // 申し出は give プロトコルで自作する → docs/design/06-communication.md）
+  }
+
+  record board-quote {
+    seller: human-id,          // 板は記名
+    give-resource: resource-id,
+    give-amount: qty,
+    want-resource: resource-id,
+    want-amount: qty,
+  }
+
+  record snapshot {
+    now: month,
+    rand: u64,                  // hash(seed, human-id, tick)。brain 唯一の乱数源
+    self-view: self-view,
+    acquaintances: list<acquaintance>,
+    events: list<event>,        // 先月自分に起きたこと
+    market: list<board-quote>,  // 板の公開気配
+  }
+}
+
+// decide の出力。戻り値ではなく import への積み上げ。
+// fuel が途中で切れても push 済みの宣言は有効（部分実行）。
+interface commit {
+  use action.{act, standing-order};
+
+  // 今月の act を積む。push した順に実行を試みる。枠数（stats 依存）の超過分は無効
+  push-act: func(a: act);
+
+  // standing order を積む（毎月全交換）
+  push-order: func(o: standing-order);
+
+  // memory を保存する。複数回呼ぶと上書き。一度も呼ばなければ先月のまま
+  save-memory: func(data: list<u8>);
+}
+
+// fuel を追加消費する深掘り観測（注意力の市場）。world 状態の読み取りのみで決定論的
+interface probe {
+  use types.{human-id, month, resource-stack};
+
+  record public-trade {
+    when: month,
+    counterparty: human-id,
+    gave: resource-stack,
+    got: resource-stack,
+  }
+
+  // 指定した知人の公開市場での売買履歴（板は記名）
+  trade-history: func(who: human-id, since: month) -> list<public-trade>;
+
+  // 紹介ネットワーク上の自分とのホップ数
+  graph-distance: func(who: human-id) -> option<u32>;
+}
+
+interface brain-api {
+  use types.{world-config};
+  use observation.{snapshot};
+
+  init: func(config: world-config);
+
+  // 戻り値なし。宣言は commit で積む
+  decide: func(snap: snapshot, memory: list<u8>);
+}
+
+world brain {
+  import probe;
+  import commit;
+
+  export brain-api;
+}
