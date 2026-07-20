@@ -1,0 +1,10 @@
+# guest components 用の独立ワークスペース。
+# wasm32-unknown-unknown でビルドし（wasi をリンクしない）、
+# wasm-tools component new で component 化する（scripts/build-guests.sh）。
+[workspace]
+resolver = "2"
+members = ["brain-forager", "scenario-m1"]
+
+[profile.release]
+opt-level = "s"
+lto = true

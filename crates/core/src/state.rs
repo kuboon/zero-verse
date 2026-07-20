@@ -63,6 +63,10 @@ pub struct World {
     pub deaths: u64,
     /// 死亡した human の生涯消費（採点・M1 計測用の台帳。死亡順）
     pub dead_ledger: Vec<(HumanId, u128)>,
+    /// 先月の板の公開気配（(seller, give_idx, give_amt, want_idx, want_amt)。記名）
+    pub last_quotes: Vec<(HumanId, usize, Qty, usize, Qty)>,
+    /// 約定回数の累計（内部 index → 回数。M2 の取引集中の計測用）
+    pub trade_volume: BTreeMap<usize, u64>,
 }
 
 impl World {
@@ -115,6 +119,17 @@ impl World {
             f.write_u64(id);
             f.write_u64((c >> 64) as u64);
             f.write_u64(c as u64);
+        }
+        for &(hid, gi, ga, wi, wa) in &self.last_quotes {
+            f.write_u64(hid);
+            f.write_u64(gi as u64);
+            f.write_u64(ga);
+            f.write_u64(wi as u64);
+            f.write_u64(wa);
+        }
+        for (&idx, &n) in &self.trade_volume {
+            f.write_u64(idx as u64);
+            f.write_u64(n);
         }
         f.write_u64(self.humans.len() as u64);
         for h in self.humans.values() {
@@ -194,6 +209,18 @@ fn hash_event(f: &mut Fnv1a, ev: &Event) {
                 f.write_u64(a);
             }
             f.write_u64(*health_gain);
+        }
+        Event::TradeExecuted {
+            counterparty,
+            gave,
+            got,
+        } => {
+            f.write_u8(6);
+            f.write_u64(*counterparty);
+            f.write_u64(gave.0);
+            f.write_u64(gave.1);
+            f.write_u64(got.0);
+            f.write_u64(got.1);
         }
         Event::ActionFailed => f.write_u8(5),
     }

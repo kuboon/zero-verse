@@ -73,6 +73,8 @@ impl World {
             env,
             deaths: 0,
             dead_ledger: Vec::new(),
+            last_quotes: Vec::new(),
+            trade_volume: BTreeMap::new(),
         }
     }
 
@@ -135,22 +137,30 @@ impl World {
             human.inventory.retain(|_, v| *v > 0);
         }
 
-        // 2. 環境変換（再生）: Φ を上限に waste i → primary i（決定論的に index 順）
+        // 2. 環境変換（再生）: Φ を上限に waste i → primary i。
+        // 1 パス目は均等割り（独占防止）、2 パス目で残 Φ を index 順に使い切る
         let mut phi_left = self.params.phi_per_month;
-        for i in 0..N_PRIMARY {
-            let w = N_PRIMARY + i;
-            if self.env[w] == 0 || phi_left == 0 {
-                continue;
+        for pass in 0..2 {
+            let cap_each = if pass == 0 {
+                self.params.phi_per_month / N_PRIMARY as u64
+            } else {
+                u64::MAX
+            };
+            for i in 0..N_PRIMARY {
+                let w = N_PRIMARY + i;
+                if self.env[w] == 0 || phi_left == 0 {
+                    continue;
+                }
+                let gain_per_unit = self.laws.regen_gain_per_unit(i).max(1);
+                let budget = phi_left.min(cap_each);
+                let conv = self.env[w].min(budget / gain_per_unit);
+                if conv == 0 {
+                    continue;
+                }
+                self.env[w] -= conv;
+                self.env[i] += conv;
+                phi_left -= conv * gain_per_unit;
             }
-            let gain_per_unit = self.laws.regen_gain_per_unit(i).max(1);
-            let max_by_phi = phi_left / gain_per_unit;
-            let conv = self.env[w].min(max_by_phi);
-            if conv == 0 {
-                continue;
-            }
-            self.env[w] -= conv;
-            self.env[i] += conv;
-            phi_left -= conv * gain_per_unit;
         }
 
         // 2'. ε 出会い（公理 6）: 確率 ε で一様ランダムな相手と知人になる
@@ -180,14 +190,18 @@ impl World {
         for &hid in &human_ids {
             let human = self.humans.get_mut(&hid).unwrap();
             let events = std::mem::take(&mut human.pending_events);
+            let memory = human.memory.clone();
             let human = &self.humans[&hid];
             let snap = Snapshot {
                 now: month,
                 rand: hash3(self.seed, hid, month as u64),
                 id: hid,
                 age_months: human.age_months,
+                sex: human.sex,
                 health: human.stats.health,
                 strength: human.stats.strength,
+                cognition: human.stats.cognition,
+                fertility: human.stats.fertility,
                 space_used: human.space_used(&self.laws, &self.params),
                 space_free,
                 resources: human
@@ -202,6 +216,18 @@ impl World {
                     .collect(),
                 acquaintances: human.acquaintances.iter().copied().collect(),
                 events,
+                market: self
+                    .last_quotes
+                    .iter()
+                    .map(|&(seller, gi, ga, wi, wa)| crate::brain::BoardQuote {
+                        seller,
+                        give_resource: self.laws.id_of_index[gi],
+                        give_amount: ga,
+                        want_resource: self.laws.id_of_index[wi],
+                        want_amount: wa,
+                    })
+                    .collect(),
+                memory,
             };
             let decision = match brains.get_mut(&hid) {
                 Some(b) => b.decide(&snap),
@@ -211,8 +237,14 @@ impl World {
         }
 
         // 4. resolve: human-id 昇順、各人 commit 順。不正な宣言は個別に無効。
+        let mut fuel_costs: BTreeMap<HumanId, Qty> = BTreeMap::new();
         for &hid in &human_ids {
             let decision = decisions.remove(&hid).unwrap_or_default();
+            // 思考コスト: fuel 消費を health 減少に写像（upkeep で適用）
+            if decision.fuel_used > 0 {
+                let cost = decision.fuel_used / self.params.fuel_per_health.max(1);
+                fuel_costs.insert(hid, cost);
+            }
             let slots = self.params.act_slots_base as usize;
             for act in decision.acts.into_iter().take(slots) {
                 self.apply_act(hid, act, month);
@@ -238,7 +270,8 @@ impl World {
                 .storage_volume(&laws)
                 .saturating_mul(params.upkeep_per_volume)
                 / QTY_SCALE;
-            let decay = params.health_decay_per_month + upkeep;
+            let decay =
+                params.health_decay_per_month + upkeep + fuel_costs.get(&hid).copied().unwrap_or(0);
             human.stats.health = human.stats.health.saturating_sub(decay);
             // strength は毎月回復する（harvest 等で消費 → docs/design/human.md の能力曲線）
             let strength_cap = 60 * QTY_SCALE;

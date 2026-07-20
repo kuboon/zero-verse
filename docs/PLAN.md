@@ -54,6 +54,12 @@
 
 **P0 の完了条件**：ダミー brain（idle のみ）で 20 human × 100 年が回り、決定論テストが CI で緑。
 
+### 状態（2026-07: wasmtime 統合まで完了）
+
+- `crates/wasm-host`: wasmtime（component-model）で brain component を Brain trait に載せた。呼び出しごとの新規インスタンス化・決定論 fuel 計量（fuel→health 写像が有効化）・fuel 切れ/trap の部分実行・wasi 非リンク（guest は wasm32-unknown-unknown → wasm-tools component new）。
+- **scenario も wasm component 化**：`wit-scenario/scenario.wit` の init（初期条件の賦与）+ judge（クリア判定）。シナリオファイル形式の未決はこれで決着（[world.md](./design/world.md)）。
+- guest 参照実装 `guests/`: **forager brain**（法則を知らずに生まれ、invoke の実験と invoke-result から食事を発見して生き延びる）と **scenario-m1**（全員生存 + 消費閾値でクリア判定）。`zeroverse-wasm run` で seed 42/7 はクリア、wasm 実行込みの決定論を CI で常時検証。
+
 ---
 
 ## M1：交易は自給自足に勝つか
