@@ -175,8 +175,9 @@ impl World {
                         got: (x_pub, x_trade),
                     },
                 );
-                // 板は記名: 約定で互いを知る
+                // 板は記名: 約定で互いを知り、親密度が上がる
                 self.add_acquaintance(a_hid, b_hid);
+                self.bump_intimacy(a_hid, b_hid);
                 *self.trade_volume.entry(xi).or_insert(0) += 1;
                 *self.trade_volume.entry(yi).or_insert(0) += 1;
 

@@ -126,6 +126,33 @@ fn cmd_m3(args: &[String]) {
     }
 }
 
+fn cmd_m4(args: &[String]) {
+    use zeroverse_core::scenarios::run_m4;
+    let seeds = parse_flag(args, "--seeds", 3);
+    let years = parse_flag(args, "--years", 35) as u32;
+
+    println!("M4: 血縁は投資行動に現れるか（夫婦 6 組・{years} 年）");
+    println!(
+        "{:>6} {:>6} {:>6} {:>6} {:>10} {:>12} {:>8}",
+        "seed", "出生", "人口", "死亡", "近親出生", "子の技能伝達", "刷り込み"
+    );
+    for seed in 1..=seeds {
+        let r = run_m4(seed, years, WorldParams::default());
+        let (taught, total) = r.kids_taught;
+        println!(
+            "{:>6} {:>6} {:>6} {:>6} {:>10} {:>9}/{:<2} {:>8}",
+            seed,
+            r.births,
+            r.population,
+            r.deaths,
+            r.incest_births,
+            taught,
+            total,
+            r.imprinted_pairs
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
@@ -133,6 +160,7 @@ fn main() {
         Some("m1") => cmd_m1(&args),
         Some("m2") => cmd_m2(&args),
         Some("m3") => cmd_m3(&args),
+        Some("m4") => cmd_m4(&args),
         _ => {
             eprintln!("usage: zeroverse run [--seed N] [--humans N] [--years N]");
             eprintln!("       zeroverse m1  [--seeds N] [--pairs N] [--years N]");

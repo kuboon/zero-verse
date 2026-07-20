@@ -758,6 +758,369 @@ pub fn run_m3(seed: u64, secret: bool, years: u32, params: WorldParams) -> M3Res
     }
 }
 
+// ---------------------------------------------------------------------------
+// M4: 血縁は投資行動に現れるか（docs/PLAN.md M4）
+//
+// world 側に家族という概念は無い。あるのは親密度（公理 10）と出産の観測非対称だけ。
+// - 夫婦: 月次の贈与が親密度を積み、相対親密度が相互 50% を超えると conceive が自動発生
+// - 母は child-born で子を確実に知る。父は「0 歳の知人が現れた」から推測する
+// - 親は子に無償で teach する（血縁投資）。子の認識は brain の状態にだけ存在する
+// - 出産後は母の親密度ポートフォリオが子に傾き、夫への相対親密度が薄まって
+//   出産間隔が自然に空く（子への愛情が避妊になる）
+// ---------------------------------------------------------------------------
+
+/// 成人の家族 brain: 自活しつつ、配偶者に贈与し、知っている子に無償で教える。
+pub struct FamilyBrain {
+    pub edible: ResourceId,
+    pub harvest_skill: SkillId,
+    pub eat_skill: SkillId,
+    pub partner: Option<HumanId>,
+    children: Vec<HumanId>,
+    known_acquaintances: Vec<HumanId>,
+    teach_cursor: usize,
+}
+
+impl FamilyBrain {
+    pub fn new(
+        edible: ResourceId,
+        harvest_skill: SkillId,
+        eat_skill: SkillId,
+        partner: Option<HumanId>,
+    ) -> Self {
+        FamilyBrain {
+            edible,
+            harvest_skill,
+            eat_skill,
+            partner,
+            children: Vec::new(),
+            known_acquaintances: Vec::new(),
+            teach_cursor: 0,
+        }
+    }
+}
+
+impl Brain for FamilyBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::Event;
+
+        // 母: child-born で確実に知る。父: 新しく現れた知人（配偶者以外）を子と推測する
+        //（父性不確実性: ε 出会いの新知人を我が子と誤認しうる。それが仕様）
+        for ev in &snap.events {
+            if let Event::ChildBorn(c) = ev {
+                if !self.children.contains(c) {
+                    self.children.push(*c);
+                }
+            }
+        }
+        for &(a, _) in &snap.acquaintances {
+            if !self.known_acquaintances.contains(&a) {
+                if !self.known_acquaintances.is_empty()
+                    && Some(a) != self.partner
+                    && !self.children.contains(&a)
+                {
+                    self.children.push(a);
+                }
+                self.known_acquaintances.push(a);
+            }
+        }
+        if self.known_acquaintances.is_empty() {
+            self.known_acquaintances = snap.acquaintances.iter().map(|&(a, _)| a).collect();
+        }
+
+        let mut acts = vec![
+            Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            },
+            Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            },
+        ];
+
+        // 贈与: 子がいれば子への給餌を優先（食文化は母系 → 自分の edible を渡す）。
+        // いなければ配偶者への求愛贈与。偶数月は贈与、奇数月は片付け。
+        if snap.now.is_multiple_of(2) {
+            let target = if self.children.is_empty() {
+                self.partner
+            } else {
+                Some(self.children[(snap.now as usize / 2) % self.children.len()])
+            };
+            if let Some(to) = target {
+                if held(snap, self.edible) > QTY_SCALE {
+                    acts.push(Act::Give {
+                        to,
+                        resource: self.edible,
+                        amount: QTY_SCALE,
+                    });
+                }
+            }
+        } else {
+            acts.extend(discard_junk(snap, &[self.edible], 1));
+        }
+
+        // 血縁投資: 知っている子に無償で teach（対価は求めない）
+        if !self.children.is_empty() {
+            let child = self.children[self.teach_cursor % self.children.len()];
+            self.teach_cursor += 1;
+            acts.push(Act::Teach {
+                student: child,
+                skill: self.harvest_skill,
+            });
+        }
+
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// 0〜6歳の baby brain（world 提供の共通 brain に相当）。もらった食料を食べるだけ。
+pub struct BabyBrain {
+    pub edible: ResourceId,
+    pub eat_skill: SkillId,
+}
+
+impl Brain for BabyBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        let mut acts = Vec::new();
+        if snap.health < 90 * QTY_SCALE && held(snap, self.edible) > 0 {
+            acts.push(Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            });
+        }
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// 6〜18歳の子 brain: 両親から learn し、習得後は自活する。
+pub struct KidBrain {
+    pub mother: HumanId,
+    pub father: HumanId,
+    pub mother_skill: SkillId,
+    pub father_skill: SkillId,
+    pub edible: ResourceId,
+    pub eat_skill: SkillId,
+}
+
+impl Brain for KidBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        let has = |s: SkillId| snap.skills.iter().any(|&(k, _)| k == s);
+        let mut acts = Vec::new();
+        if has(self.mother_skill) {
+            acts.push(Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.mother_skill],
+            });
+        } else {
+            acts.push(Act::Learn {
+                teacher: self.mother,
+                skill: self.mother_skill,
+            });
+        }
+        if !has(self.father_skill) {
+            acts.push(Act::Learn {
+                teacher: self.father,
+                skill: self.father_skill,
+            });
+        }
+        if snap.health < 90 * QTY_SCALE && held(snap, self.edible) > 0 {
+            acts.push(Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            });
+        }
+        acts.extend(discard_junk(snap, &[self.edible], 1));
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+pub struct M4Result {
+    pub births: u64,
+    pub population: usize,
+    pub deaths: u64,
+    /// 近親（親子・きょうだい）ペアからの出生数（刷り込みが効いていれば 0）
+    pub incest_births: u64,
+    /// 8 歳以上で harvest skill を持つ子 / 8 歳以上の子（血縁経由の技能伝達）
+    pub kids_taught: (usize, usize),
+    pub imprinted_pairs: usize,
+}
+
+/// M4 実験: 夫婦 6 組から始め、出生・継承・血縁投資を観測する。
+/// ハーネスが 6 歳（baby → kid）と 18 歳（kid → adult）で brain を切り替える
+///（50/50 継承は本シナリオでは両親とも FamilyBrain 系のため同型）。
+pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
+    let n_adults = 12;
+    let mut world = World::new(seed, n_adults, params);
+    let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+
+    // 性別で分けて夫婦を作る（conceive は異性ペアのみ）
+    let females: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .collect();
+    let males: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .collect();
+
+    let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
+    // 各人の食文化（edible）記録: 子は母の edible を継ぐ
+    let mut edible_of: BTreeMap<HumanId, usize> = BTreeMap::new();
+
+    for (k, &hid) in ids.iter().enumerate() {
+        let e = k % N_PRIMARY;
+        edible_of.insert(hid, e);
+        world.grant_skill(hid, N_PRIMARY + e, STAT_MAX); // E_e
+        world.grant_skill(hid, e, STAT_MAX); // H_e
+    }
+    for (i, (&f, &m)) in females.iter().zip(males.iter()).enumerate() {
+        let _ = i;
+        world.add_acquaintance(f, m);
+        for &(hid, partner) in &[(f, m), (m, f)] {
+            let e = edible_of[&hid];
+            let rid = world.laws.id_of_index[e];
+            let hs = world.laws.skill_id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            brains.insert(hid, Box::new(FamilyBrain::new(rid, hs, es, Some(partner))));
+        }
+    }
+    // あぶれた性別の人は独身の自活 brain
+    for &hid in females
+        .iter()
+        .skip(males.len())
+        .chain(males.iter().skip(females.len()))
+    {
+        let e = edible_of[&hid];
+        let rid = world.laws.id_of_index[e];
+        let hs = world.laws.skill_id_of_index[e];
+        let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+        brains.insert(hid, Box::new(FamilyBrain::new(rid, hs, es, None)));
+    }
+
+    let months = years * world.params.months_per_year;
+    for _ in 0..months {
+        world.step(&mut brains);
+
+        // 新生児に baby brain を割り当てる（食文化は母から: 生得の eat skill と一致）
+        let newborns: Vec<HumanId> = world
+            .humans
+            .keys()
+            .copied()
+            .filter(|id| !brains.contains_key(id))
+            .collect();
+        for c in newborns {
+            let (mother, _) = world.parentage[&c];
+            let e = edible_of[&mother];
+            edible_of.insert(c, e);
+            let rid = world.laws.id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            brains.insert(
+                c,
+                Box::new(BabyBrain {
+                    edible: rid,
+                    eat_skill: es,
+                }),
+            );
+        }
+
+        // 6 歳: brain 継承（kid へ切替）。18 歳: 成人（自活。第二世代は独身のまま）
+        let transitions: Vec<(HumanId, u32)> = world
+            .humans
+            .iter()
+            .filter(|(id, _)| world.parentage.contains_key(id))
+            .map(|(&id, h)| (id, h.age_months))
+            .collect();
+        for (id, age) in transitions {
+            let (mother, father) = world.parentage[&id];
+            let e = edible_of[&id];
+            let rid = world.laws.id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            if age == 6 * 12 {
+                let ms = world.laws.skill_id_of_index[edible_of.get(&mother).copied().unwrap_or(e)];
+                let fs = world.laws.skill_id_of_index[edible_of.get(&father).copied().unwrap_or(e)];
+                brains.insert(
+                    id,
+                    Box::new(KidBrain {
+                        mother,
+                        father,
+                        mother_skill: ms,
+                        father_skill: fs,
+                        edible: rid,
+                        eat_skill: es,
+                    }),
+                );
+            } else if age == 18 * 12 {
+                let hs = world.laws.skill_id_of_index[e];
+                brains.insert(id, Box::new(FamilyBrain::new(rid, hs, es, None)));
+            }
+        }
+    }
+
+    // 集計
+    let is_kin = |a: HumanId, b: HumanId| -> bool {
+        let pa = world.parentage.get(&a);
+        let pb = world.parentage.get(&b);
+        // 親子
+        if pa.map(|&(m, f)| m == b || f == b).unwrap_or(false)
+            || pb.map(|&(m, f)| m == a || f == a).unwrap_or(false)
+        {
+            return true;
+        }
+        // きょうだい（親を共有）
+        if let (Some(&(ma, fa)), Some(&(mb, fb))) = (pa, pb) {
+            return ma == mb || fa == fb;
+        }
+        false
+    };
+    let incest_births = world
+        .parentage
+        .values()
+        .filter(|&&(m, f)| is_kin(m, f))
+        .count() as u64;
+    let kids: Vec<HumanId> = world
+        .humans
+        .keys()
+        .copied()
+        .filter(|id| world.parentage.contains_key(id))
+        .filter(|id| world.humans[id].age_months >= 8 * 12)
+        .collect();
+    let taught = kids
+        .iter()
+        .filter(|id| {
+            world.humans[id]
+                .skills
+                .keys()
+                .any(|&k| matches!(world.laws.skills[k], crate::laws::SkillKind::Harvest(_)))
+        })
+        .count();
+
+    M4Result {
+        births: world.births,
+        population: world.humans.len(),
+        deaths: world.deaths,
+        incest_births,
+        kids_taught: (taught, kids.len()),
+        imprinted_pairs: world.imprinted.len(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -808,6 +1171,34 @@ mod tests {
         }
     }
 
+    /// M4 合格基準（docs/PLAN.md）:
+    /// - 血縁構造が投資行動に現れる: world 側に家族概念を書かずに、親から子への
+    ///   無償の teach で harvest skill が世代間伝達される
+    /// - conceive は親密度から自動発生し（出生 > 0）、Westermarck 刷り込みにより
+    ///   近親（親子・きょうだい）からの出生がゼロ
+    #[test]
+    fn kinship_investment_and_incest_avoidance() {
+        for seed in 1..=3 {
+            let r = run_m4(seed, 35, WorldParams::default());
+            assert!(r.births >= 3, "seed {seed}: only {} births", r.births);
+            assert_eq!(
+                r.incest_births, 0,
+                "seed {seed}: {} incest births (imprinting failed)",
+                r.incest_births
+            );
+            let (taught, total) = r.kids_taught;
+            assert!(
+                total > 0 && taught * 10 >= total * 8,
+                "seed {seed}: only {taught}/{total} kids taught by kin"
+            );
+            assert!(
+                r.population < 60,
+                "seed {seed}: population exploded to {}",
+                r.population
+            );
+        }
+    }
+
     /// M3 合格基準（docs/PLAN.md）:
     /// - world 側に価格も契約も置かずに、skill の対価付き教育（if-taught-me の月払いを
     ///   伴う teach/learn の対）が継続的に成立する
@@ -834,7 +1225,9 @@ mod tests {
                     "seed {seed} {name}: only {} paid lessons",
                     r.paid_teach_transfers
                 );
-                assert_eq!(r.alive, 6, "seed {seed} {name}: someone starved");
+                // M4 以降、教育の相互作用が親密度を積んで出生が起きうる（人口は増える方向）。
+                // ここで検証したいのは「誰も餓死しない」こと
+                assert!(r.alive >= 6, "seed {seed} {name}: someone starved");
             }
             assert!(
                 open.re_acquisitions > 0,
