@@ -5,6 +5,7 @@
 //! エンジンには「commit 済み宣言の列」として渡る — Decision がその列に相当する）。
 
 use crate::laws::SkillId;
+use crate::state::Sex;
 use crate::{HumanId, Qty, ResourceId};
 
 /// 先月自分に起きたこと（WIT の observation.event に相当。公開 id で表現）
@@ -29,8 +30,37 @@ pub enum Event {
         /// health の増分（1/1000）
         health_gain: Qty,
     },
+    /// 板での約定（→ docs/design/04-market.md）
+    TradeExecuted {
+        counterparty: HumanId,
+        gave: (ResourceId, Qty),
+        got: (ResourceId, Qty),
+    },
     /// 失敗理由は返さない
     ActionFailed,
+}
+
+/// 板の公開気配（記名 → docs/design/04-market.md）
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoardQuote {
+    pub seller: HumanId,
+    pub give_resource: ResourceId,
+    pub give_amount: Qty,
+    pub want_resource: ResourceId,
+    pub want_amount: Qty,
+}
+
+/// standing order（WIT の action.standing-order。M2 では limit-order のみ。
+/// conditional-give は teach/learn と一緒に M3 で入れる）
+#[derive(Clone, Debug)]
+pub enum StandingOrder {
+    Limit {
+        give_resource: ResourceId,
+        give_amount: Qty,
+        want_resource: ResourceId,
+        want_amount: Qty,
+        partial: bool,
+    },
 }
 
 /// snapshot（M1 版）。WIT の observation.snapshot のサブセット。
@@ -41,8 +71,11 @@ pub struct Snapshot {
     pub rand: u64,
     pub id: HumanId,
     pub age_months: u32,
+    pub sex: Sex,
     pub health: Qty,
     pub strength: Qty,
+    pub cognition: Qty,
+    pub fertility: Qty,
     pub space_used: Qty,
     pub space_free: Qty,
     /// 公開 resource-id で表現した保有
@@ -51,6 +84,10 @@ pub struct Snapshot {
     pub skills: Vec<(SkillId, Qty)>,
     pub acquaintances: Vec<HumanId>,
     pub events: Vec<Event>,
+    /// 先月の板の公開気配（記名）
+    pub market: Vec<BoardQuote>,
+    /// 先月 save-memory した blob（decide の第 2 引数に相当）
+    pub memory: Vec<u8>,
 }
 
 /// commit 済みの宣言列（WIT の commit.push-act の積み上げ結果に相当）
@@ -75,8 +112,13 @@ pub enum Act {
 #[derive(Clone, Debug, Default)]
 pub struct Decision {
     pub acts: Vec<Act>,
+    /// standing orders（毎月全交換 → docs/design/04-market.md）
+    pub orders: Vec<StandingOrder>,
     /// None = save-memory を呼ばなかった（先月のまま）
     pub memory: Option<Vec<u8>>,
+    /// この decide が消費した WASM fuel。health の減少に写像される
+    /// （docs/design/human.md 思考コスト。ネイティブ brain は 0）
+    pub fuel_used: u64,
 }
 
 pub trait Brain {

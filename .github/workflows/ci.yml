@@ -26,3 +26,39 @@ jobs:
           echo "$a"
           echo "$b"
           test "$a" = "$b"
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            guests
+      - uses: actions/cache@v5
+        id: wasm-tools-cache
+        with:
+          path: ~/.cargo/bin/wasm-tools
+          key: wasm-tools-v1
+      - name: install wasm-tools
+        if: steps.wasm-tools-cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-tools --locked
+      - run: ./scripts/build-guests.sh
+      # wasm brain + scenario component のエンドツーエンド:
+      # forager が実験から食事を発見して全員生存できること（cleared=true で exit 0）
+      # + wasm 実行を含めても決定論が保たれること
+      - name: wasm end-to-end + determinism
+        run: |
+          run() {
+            cargo run -q -p zeroverse-wasm-host --bin zeroverse-wasm -- run \
+              --scenario target/components/scenario-m1.wasm \
+              --brain 0=target/components/brain-forager.wasm \
+              --seed 42 --years 30
+          }
+          a="$(run | tee /dev/stderr | grep 'state hash')"
+          b="$(run | grep 'state hash')"
+          test "$a" = "$b"

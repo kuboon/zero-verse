@@ -37,7 +37,12 @@ impl Brain for AutarkyBrain {
             },
         ];
         acts.extend(discard_junk(snap, &[self.edible], 2));
-        Decision { acts, memory: None }
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
     }
 }
 
@@ -69,7 +74,12 @@ impl Brain for TraderBrain {
             using_skills: vec![self.eat_skill],
         });
         acts.extend(discard_junk(snap, &[self.edible, self.specialty], 1));
-        Decision { acts, memory: None }
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
     }
 }
 

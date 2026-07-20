@@ -1,0 +1,57 @@
+// zeroverse scenario component interface (v0.1)
+//
+// シナリオ = 生成パイプラインへの入力一式 + クリア条件（docs/design/world.md）。
+// クリア条件の記述形式は「wasm component の judge 関数」として実装する。
+// scenario はメタ層（エンジン側の観測者）であり、brain と違って world の内部
+// index（primary 0..4 など）を知ってよい。判定は world 内のルールに介入しない。
+
+package zeroverse:scenario@0.1.0;
+
+interface scenario-api {
+  record skill-grant {
+    // 法則グラフの skill 内部 index（0..n-primary が harvest_i、以降が eat_i）
+    skill-index: u32,
+    // 熟練度（1/1000。100_000 = 100%）
+    proficiency: u64,
+  }
+
+  record human-setup {
+    // brain の割り当てグループ（ランナーが group → component を対応させる）
+    brain-group: u32,
+    skills: list<skill-grant>,
+    // 初期知人（human-setup リストへの index）
+    acquaintances: list<u32>,
+  }
+
+  record world-setup {
+    humans: list<human-setup>,
+  }
+
+  init: func(seed: u64) -> world-setup;
+
+  record group-report {
+    group: u32,
+    alive: u32,
+    total: u32,
+    // グループ平均の生涯消費 Δg（1/1000 スケールに丸め済み）
+    mean-consumed: u64,
+  }
+
+  record world-report {
+    month: u32,
+    groups: list<group-report>,
+  }
+
+  record verdict {
+    cleared: bool,
+    // スコア（1/1000）。キャンペーンでは自 brain 比率と組み合わせる
+    score: u64,
+    note: string,
+  }
+
+  judge: func(report: world-report) -> verdict;
+}
+
+world scenario {
+  export scenario-api;
+}

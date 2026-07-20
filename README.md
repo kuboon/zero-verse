@@ -26,7 +26,7 @@
 
 ## ステータス
 
-**P0（基盤）と M1（交易は自給自足に勝つか）を達成。** 決定論エンジン・環境循環・空間・skill（harvest / 食事）・参照 brain 2 種を実装済み。`cargo run -p zeroverse-cli -- m1` で交易 vs 自給自足の生涯消費比（全シードで > 1.0）を再現できる。次は wasmtime 統合と M2（貨幣の創発）。詳細は [docs/PLAN.md](./docs/PLAN.md)。
+**P0（基盤 + wasmtime 統合）と M1（交易は自給自足に勝つか）を達成。** 決定論エンジン・環境循環・空間・skill（harvest / 食事）・参照 brain を実装済み。`cargo run -p zeroverse-cli -- m1` で交易 vs 自給自足の生涯消費比（全シードで > 1.0）を再現できる。brain と scenario（init + クリア判定）は **WASM component** として動く：`scripts/build-guests.sh` でビルドし、`zeroverse-wasm run --scenario ... --brain 0=...` で「法則を知らずに生まれた brain が実験から食事を発見して生き延びる」デモが走る。次は M2（貨幣の創発）。詳細は [docs/PLAN.md](./docs/PLAN.md)。
 
 ### 実装セッションの読み順
 

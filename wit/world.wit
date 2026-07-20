@@ -13,7 +13,7 @@
 //   4. snapshot に入れた情報は無料の全知になる。「自分の内側は全部見える、他人は行動の痕跡だけ」。
 //   5. fuel 消費は health の減少に写像する。memory 上限は年齢の関数。
 
-package zeroverse:world@0.1.0;
+package zeroverse:%world@0.1.0;
 
 interface types {
   type human-id = u64;     // 連番にしない（出生順 = 血縁の手がかり）
@@ -23,7 +23,7 @@ interface types {
   type month = u32;        // world 開始からの通算月
 
   record resource-stack {
-    resource: resource-id,
+    %resource: resource-id,
     amount: qty,
   }
 
@@ -138,10 +138,19 @@ interface observation {
     last-interaction: option<month>,
   }
 
-  record transfer-info { from: human-id, stack: resource-stack }
+  record transfer-info { %from: human-id, stack: resource-stack }
   record trade-info { counterparty: human-id, gave: resource-stack, got: resource-stack }
   record teach-info { partner: human-id, skill: skill-id }  // 残り月数は開示しない
   record introduction-info { via: human-id, subject: human-id }
+
+  // 自分の invoke の結果。食事ブートストラップの搬送路:
+  // 6歳継承直後の brain はここから「どの resource × skill が食事か」を学ぶ
+  record invoke-result-info {
+    skill: skill-id,
+    consumed: list<resource-stack>,
+    produced: list<resource-stack>,
+    health-gain: qty,
+  }
 
   variant event {
     received-transfer(transfer-info),
@@ -152,6 +161,7 @@ interface observation {
     encountered(human-id),          // ε 由来の偶発的出会い
     child-born(human-id),           // 出産。母にのみ届く
     someone-died(human-id),         // 知人の死のみ通知
+    invoke-result(invoke-result-info),
     action-failed(action-kind),     // 失敗理由は返さない
     // proposal-received は P0-1 で削除（無料シグナル化するため。
     // 申し出は give プロトコルで自作する → docs/design/06-communication.md）

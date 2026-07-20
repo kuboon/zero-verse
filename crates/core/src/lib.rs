@@ -59,6 +59,8 @@ pub struct WorldParams {
     pub eat_health_per_unit: Qty,
     /// ε: 偶発的出会いの確率（千分率/月。公理 6）
     pub epsilon_permille: u64,
+    /// 思考コスト換算: health 0.001 あたりの fuel（docs/design/human.md）
+    pub fuel_per_health: u64,
 }
 
 impl Default for WorldParams {
@@ -80,6 +82,7 @@ impl Default for WorldParams {
             strength_regen_per_month: 10 * QTY_SCALE,
             eat_health_per_unit: 2 * QTY_SCALE,
             epsilon_permille: 10,
+            fuel_per_health: 1_000_000, // health 0.001 = 100 万 fuel（M1 仮）
         }
     }
 }
