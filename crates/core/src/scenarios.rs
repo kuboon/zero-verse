@@ -453,7 +453,7 @@ pub fn run_m2(seed: u64, years: u32, params: WorldParams) -> M2Result {
     let involvement: Vec<(u64, u64)> = (0..N_RESOURCES)
         .map(|i| {
             let v = setup.world.trade_volume.get(&i).copied().unwrap_or(0);
-            let share = if total == 0 { 0 } else { v * 1000 / total };
+            let share = (v * 1000).checked_div(total).unwrap_or(0);
             (share, setup.world.laws.specs[i].decay_permille)
         })
         .collect();
