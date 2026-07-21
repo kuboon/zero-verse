@@ -812,7 +812,7 @@ impl Brain for FamilyBrain {
                 }
             }
         }
-        for &(a, _) in &snap.acquaintances {
+        for a in snap.acquaintances.iter().map(|v| v.id) {
             if !self.known_acquaintances.contains(&a) {
                 if !self.known_acquaintances.is_empty()
                     && Some(a) != self.partner
@@ -824,7 +824,7 @@ impl Brain for FamilyBrain {
             }
         }
         if self.known_acquaintances.is_empty() {
-            self.known_acquaintances = snap.acquaintances.iter().map(|&(a, _)| a).collect();
+            self.known_acquaintances = snap.acquaintances.iter().map(|v| v.id).collect();
         }
 
         let mut acts = vec![
@@ -958,6 +958,78 @@ pub struct M4Result {
     /// 8 歳以上で harvest skill を持つ子 / 8 歳以上の子（血縁経由の技能伝達）
     pub kids_taught: (usize, usize),
     pub imprinted_pairs: usize,
+    /// 母から子への投資の総計（一方的贈与の qty, teach 進捗月数）
+    pub mother_invest: (Qty, u64),
+    /// 父（と信じる側）から子への投資の総計
+    pub father_invest: (Qty, u64),
+}
+
+/// 家族系シナリオの共通ハーネス。毎月 step し、
+/// 新生児 → baby brain（食文化は母から）、6 歳 → kid brain（両親から learn）、
+/// 18 歳 → 自活成人、の切替を行う。
+fn run_family_loop(
+    world: &mut World,
+    brains: &mut BTreeMap<HumanId, Box<dyn Brain>>,
+    edible_of: &mut BTreeMap<HumanId, usize>,
+    months: u32,
+) {
+    for _ in 0..months {
+        world.step(brains);
+
+        // 新生児に baby brain を割り当てる（食文化は母から: 生得の eat skill と一致）
+        let newborns: Vec<HumanId> = world
+            .humans
+            .keys()
+            .copied()
+            .filter(|id| !brains.contains_key(id))
+            .collect();
+        for c in newborns {
+            let (mother, _) = world.parentage[&c];
+            let e = edible_of[&mother];
+            edible_of.insert(c, e);
+            let rid = world.laws.id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            brains.insert(
+                c,
+                Box::new(BabyBrain {
+                    edible: rid,
+                    eat_skill: es,
+                }),
+            );
+        }
+
+        // 6 歳: brain 継承（kid へ切替）。18 歳: 成人（自活。第二世代は独身のまま）
+        let transitions: Vec<(HumanId, u32)> = world
+            .humans
+            .iter()
+            .filter(|(id, _)| world.parentage.contains_key(id))
+            .map(|(&id, h)| (id, h.age_months))
+            .collect();
+        for (id, age) in transitions {
+            let (mother, father) = world.parentage[&id];
+            let e = edible_of[&id];
+            let rid = world.laws.id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            if age == 6 * 12 {
+                let ms = world.laws.skill_id_of_index[edible_of.get(&mother).copied().unwrap_or(e)];
+                let fs = world.laws.skill_id_of_index[edible_of.get(&father).copied().unwrap_or(e)];
+                brains.insert(
+                    id,
+                    Box::new(KidBrain {
+                        mother,
+                        father,
+                        mother_skill: ms,
+                        father_skill: fs,
+                        edible: rid,
+                        eat_skill: es,
+                    }),
+                );
+            } else if age == 18 * 12 {
+                let hs = world.laws.skill_id_of_index[e];
+                brains.insert(id, Box::new(FamilyBrain::new(rid, hs, es, None)));
+            }
+        }
+    }
 }
 
 /// M4 実験: 夫婦 6 組から始め、出生・継承・血縁投資を観測する。
@@ -1015,63 +1087,7 @@ pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
     }
 
     let months = years * world.params.months_per_year;
-    for _ in 0..months {
-        world.step(&mut brains);
-
-        // 新生児に baby brain を割り当てる（食文化は母から: 生得の eat skill と一致）
-        let newborns: Vec<HumanId> = world
-            .humans
-            .keys()
-            .copied()
-            .filter(|id| !brains.contains_key(id))
-            .collect();
-        for c in newborns {
-            let (mother, _) = world.parentage[&c];
-            let e = edible_of[&mother];
-            edible_of.insert(c, e);
-            let rid = world.laws.id_of_index[e];
-            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
-            brains.insert(
-                c,
-                Box::new(BabyBrain {
-                    edible: rid,
-                    eat_skill: es,
-                }),
-            );
-        }
-
-        // 6 歳: brain 継承（kid へ切替）。18 歳: 成人（自活。第二世代は独身のまま）
-        let transitions: Vec<(HumanId, u32)> = world
-            .humans
-            .iter()
-            .filter(|(id, _)| world.parentage.contains_key(id))
-            .map(|(&id, h)| (id, h.age_months))
-            .collect();
-        for (id, age) in transitions {
-            let (mother, father) = world.parentage[&id];
-            let e = edible_of[&id];
-            let rid = world.laws.id_of_index[e];
-            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
-            if age == 6 * 12 {
-                let ms = world.laws.skill_id_of_index[edible_of.get(&mother).copied().unwrap_or(e)];
-                let fs = world.laws.skill_id_of_index[edible_of.get(&father).copied().unwrap_or(e)];
-                brains.insert(
-                    id,
-                    Box::new(KidBrain {
-                        mother,
-                        father,
-                        mother_skill: ms,
-                        father_skill: fs,
-                        edible: rid,
-                        eat_skill: es,
-                    }),
-                );
-            } else if age == 18 * 12 {
-                let hs = world.laws.skill_id_of_index[e];
-                brains.insert(id, Box::new(FamilyBrain::new(rid, hs, es, None)));
-            }
-        }
-    }
+    run_family_loop(&mut world, &mut brains, &mut edible_of, months);
 
     // 集計
     let is_kin = |a: HumanId, b: HumanId| -> bool {
@@ -1111,6 +1127,22 @@ pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
         })
         .count();
 
+    // 母 vs 父の投資差（血縁投資台帳を親の役割で集計）
+    let mut mother_invest = (0u64, 0u64);
+    let mut father_invest = (0u64, 0u64);
+    for (&(p, c), &(gives, teach_months)) in &world.parental_investment {
+        let (m, f) = world.parentage[&c];
+        let tgt = if p == m {
+            &mut mother_invest
+        } else if p == f {
+            &mut father_invest
+        } else {
+            continue;
+        };
+        tgt.0 += gives;
+        tgt.1 += teach_months;
+    }
+
     M4Result {
         births: world.births,
         population: world.humans.len(),
@@ -1118,6 +1150,384 @@ pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
         incest_births,
         kids_taught: (taught, kids.len()),
         imprinted_pairs: world.imprinted.len(),
+        mother_invest,
+        father_invest,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M4 派生実験 1: 同族内婚は不利か（docs/PLAN.md M4 持ち越し）
+//
+// 2 つの氏族（clan）に別々の食文化と harvest 技能を持たせる。
+// - 同族内婚（endogamy）: 夫婦とも同じ氏族 → 子に流れる技能は 1 系統
+// - 族外婚（exogamy）: 夫婦が別氏族 → 子は母系の食文化 + 両親の harvest 2 系統
+// 参加者・夫婦数は両条件で同一（ペアの組み方だけが違う）。
+// 計測: 育った子（8 歳以上）1 人あたりの harvest skill 種数と平均生涯消費。
+// ---------------------------------------------------------------------------
+
+pub struct ClanResult {
+    pub births: u64,
+    pub population: usize,
+    pub deaths: u64,
+    /// 8 歳以上に育った子の数
+    pub grown_children: usize,
+    /// 育った子 1 人あたりの harvest skill 種数（×1000）
+    pub child_harvest_skills_permille: u64,
+    /// 育った子の平均生涯消費（1/1000 Δg）
+    pub child_mean_consumed: u64,
+}
+
+pub fn run_m4_clans(seed: u64, exogamy: bool, years: u32, params: WorldParams) -> ClanResult {
+    let n_adults = 16;
+    let mut world = World::new(seed, n_adults, params);
+    let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+
+    let females: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .collect();
+    let males: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .collect();
+
+    // ペア数を偶数に揃え、女性 i・男性 i に氏族 i % 2 を割り当てる。
+    // 同族内婚は f_i × m_i（同氏族）、族外婚は f_i × m_{i+1}（異氏族）。
+    // 参加者集合とペア数は両条件で同一になり、組み方だけが実験変数になる
+    let pairs = females.len().min(males.len()) & !1usize;
+    let clan_of = |i: usize| i % 2; // 氏族 c の食文化 = primary c
+
+    let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
+    let mut edible_of: BTreeMap<HumanId, usize> = BTreeMap::new();
+
+    // 氏族の技能を賦与（自氏族の harvest / eat のみ）
+    let mut setup = |world: &mut World, hid: HumanId, clan: usize| {
+        edible_of.insert(hid, clan);
+        world.grant_skill(hid, clan, STAT_MAX); // H_clan
+        world.grant_skill(hid, N_PRIMARY + clan, STAT_MAX); // E_clan
+    };
+    for i in 0..pairs {
+        setup(&mut world, females[i], clan_of(i));
+        setup(&mut world, males[i], clan_of(i));
+    }
+    // ペア外の成人は独身の自活 brain（氏族 0 とする）
+    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
+        setup(&mut world, hid, 0);
+    }
+
+    for i in 0..pairs {
+        let f = females[i];
+        let m = if exogamy {
+            males[(i + 1) % pairs]
+        } else {
+            males[i]
+        };
+        world.add_acquaintance(f, m);
+        for &(hid, partner) in &[(f, m), (m, f)] {
+            let e = edible_of[&hid];
+            let rid = world.laws.id_of_index[e];
+            let hs = world.laws.skill_id_of_index[e];
+            let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+            brains.insert(hid, Box::new(FamilyBrain::new(rid, hs, es, Some(partner))));
+        }
+    }
+    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
+        let e = edible_of[&hid];
+        let rid = world.laws.id_of_index[e];
+        let hs = world.laws.skill_id_of_index[e];
+        let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+        brains.insert(hid, Box::new(FamilyBrain::new(rid, hs, es, None)));
+    }
+
+    let months = years * world.params.months_per_year;
+    run_family_loop(&mut world, &mut brains, &mut edible_of, months);
+
+    // 集計: 育った子の harvest skill 種数と生涯消費
+    let consumption = world.lifetime_consumption();
+    let grown: Vec<HumanId> = world
+        .humans
+        .keys()
+        .copied()
+        .filter(|id| world.parentage.contains_key(id))
+        .filter(|id| world.humans[id].age_months >= 8 * 12)
+        .collect();
+    let harvest_total: u64 = grown
+        .iter()
+        .map(|id| {
+            world.humans[id]
+                .skills
+                .keys()
+                .filter(|&&k| matches!(world.laws.skills[k], crate::laws::SkillKind::Harvest(_)))
+                .count() as u64
+        })
+        .sum();
+    let consumed_total: u128 = grown
+        .iter()
+        .map(|id| consumption.get(id).copied().unwrap_or(0))
+        .sum();
+    let n = grown.len() as u64;
+    ClanResult {
+        births: world.births,
+        population: world.humans.len(),
+        deaths: world.deaths,
+        grown_children: grown.len(),
+        child_harvest_skills_permille: harvest_total * 1000 / n.max(1),
+        child_mean_consumed: (consumed_total / (n as u128).max(1) / 1000).min(u64::MAX as u128)
+            as u64,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M4 派生実験 2: 婚姻契約は繰り返しゲームとして維持されるか（未決 #7 の判断材料）
+//
+// world に契約は存在しない。あるのは「贈与 = 親密度の増加」「received-transfer の観測」
+// だけ。貞節 brain は**しっぺ返し**で贈与する: 相手からの贈与が K ヶ月途絶えたら
+// 自分も止める（許し付き TFT。相手が再開すれば自分も再開する）。
+// 浮気 brain は贈与を全知人へ薄く回す。
+// 予測: 貞節ペアは相互贈与の均衡（高親密度）を維持して子をもうけ、
+// 浮気者は誰とも相対親密度 50% を超えられず子を残せない。
+// 「一定以上他人と親密にならない」という婚姻契約が、執行機構なしに
+// 相互性の均衡として立ち上がるかを見る。
+// ---------------------------------------------------------------------------
+
+/// 貞節 brain（許し付きしっぺ返し）: 配偶者からの贈与が途絶えたら自分の贈与も止める。
+pub struct SpouseBrain {
+    pub edible: ResourceId,
+    pub harvest_skill: SkillId,
+    pub eat_skill: SkillId,
+    pub partner: HumanId,
+    /// 相手からの贈与をこれだけの月数見なかったら協調を止める
+    pub patience_months: u32,
+    months_since_received: u32,
+}
+
+impl Brain for SpouseBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::Event;
+        let received = snap
+            .events
+            .iter()
+            .any(|ev| matches!(ev, Event::ReceivedTransfer { from, .. } if *from == self.partner));
+        if received {
+            self.months_since_received = 0;
+        } else {
+            self.months_since_received = self.months_since_received.saturating_add(1);
+        }
+
+        let mut acts = vec![
+            Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            },
+            Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            },
+        ];
+        // 協調（月 0 は先に手を差し出す）。破綻中は贈与しない = 離婚状態。
+        // 相手が再開すれば received で復縁する。年に一度は「和解の手」を出す:
+        // 不作などの騒音で相互破綻（TFT の吸収状態）に落ちても、双方が貞節なら
+        // 年始の相互贈与で協調が再点火する。浮気者相手では実らず低親密度のまま
+        let olive_branch = snap.now.is_multiple_of(12);
+        let cooperate =
+            snap.now == 0 || self.months_since_received <= self.patience_months || olive_branch;
+        // 贈与額は軽くてよい: 親密度の増分は相互作用の回数で決まり量に依らない
+        //（トークン贈与。M4 の親密度仕様 → docs/design/human.md）
+        if cooperate && held(snap, self.edible) > QTY_SCALE {
+            acts.push(Act::Give {
+                to: self.partner,
+                resource: self.edible,
+                amount: QTY_SCALE / 2,
+            });
+        }
+        acts.extend(discard_junk(snap, &[self.edible], 1));
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// 浮気 brain: 贈与を全知人に薄く回す（配偶者を特別扱いしない）。
+pub struct PhilandererBrain {
+    pub edible: ResourceId,
+    pub harvest_skill: SkillId,
+    pub eat_skill: SkillId,
+    cursor: usize,
+}
+
+impl Brain for PhilandererBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        let mut acts = vec![
+            Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            },
+            Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            },
+        ];
+        if !snap.acquaintances.is_empty() && held(snap, self.edible) > QTY_SCALE {
+            let to = snap.acquaintances[self.cursor % snap.acquaintances.len()].id;
+            self.cursor += 1;
+            acts.push(Act::Give {
+                to,
+                resource: self.edible,
+                amount: QTY_SCALE,
+            });
+        }
+        acts.extend(discard_junk(snap, &[self.edible], 1));
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+pub struct MarriageResult {
+    /// 貞節×貞節ペア数 / その出生数 / ラン終了時のペア親密度平均（1/1000）
+    pub faithful_couples: usize,
+    pub faithful_births: u64,
+    pub faithful_mean_intimacy: Qty,
+    /// 両者存命の貞節ペアに限った親密度平均（死別ペアは配偶者の死後に減衰するだけなので分ける）
+    pub faithful_intact_pairs: usize,
+    pub faithful_intact_intimacy: Qty,
+    /// 貞節×浮気ペア数 / その出生数 / ペア親密度平均
+    pub mixed_couples: usize,
+    pub mixed_births: u64,
+    pub mixed_mean_intimacy: Qty,
+    pub births: u64,
+    pub deaths: u64,
+}
+
+pub fn run_m4_marriage(seed: u64, years: u32, params: WorldParams) -> MarriageResult {
+    let n_adults = 16;
+    let mut world = World::new(seed, n_adults, params);
+    let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+
+    let females: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .collect();
+    let males: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .collect();
+    let pairs = females.len().min(males.len());
+
+    let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
+    let mut edible_of: BTreeMap<HumanId, usize> = BTreeMap::new();
+
+    for (k, &hid) in ids.iter().enumerate() {
+        let e = k % N_PRIMARY;
+        edible_of.insert(hid, e);
+        world.grant_skill(hid, e, STAT_MAX);
+        world.grant_skill(hid, N_PRIMARY + e, STAT_MAX);
+    }
+
+    // 前半のペアは貞節×貞節、後半は貞節（妻）×浮気（夫）
+    let n_faithful = pairs / 2;
+    let mut couples: Vec<(HumanId, HumanId, bool)> = Vec::new(); // (妻, 夫, 夫が浮気者か)
+    for i in 0..pairs {
+        let (f, m) = (females[i], males[i]);
+        let phil = i >= n_faithful;
+        couples.push((f, m, phil));
+        world.add_acquaintance(f, m);
+
+        let brain_for = |hid: HumanId, partner: HumanId, world: &World| -> Box<dyn Brain> {
+            let e = edible_of[&hid];
+            Box::new(SpouseBrain {
+                edible: world.laws.id_of_index[e],
+                harvest_skill: world.laws.skill_id_of_index[e],
+                eat_skill: world.laws.skill_id_of_index[N_PRIMARY + e],
+                partner,
+                patience_months: 6,
+                months_since_received: 0,
+            })
+        };
+        brains.insert(f, brain_for(f, m, &world));
+        if phil {
+            let e = edible_of[&m];
+            brains.insert(
+                m,
+                Box::new(PhilandererBrain {
+                    edible: world.laws.id_of_index[e],
+                    harvest_skill: world.laws.skill_id_of_index[e],
+                    eat_skill: world.laws.skill_id_of_index[N_PRIMARY + e],
+                    cursor: 0,
+                }),
+            );
+        } else {
+            brains.insert(m, brain_for(m, f, &world));
+        }
+    }
+    // 浮気者は「顔が広い」: 全員と知人で、既に付き合い（初期親密度）がある。
+    // 配偶者だけを特別扱いしない社会関係を初期条件として与える
+    for &(f, m, phil) in &couples {
+        if phil {
+            for &other in &ids {
+                if other != m {
+                    world.add_acquaintance(m, other);
+                    if other != f {
+                        let key = (m.min(other), m.max(other));
+                        world.intimacy.insert(key, 10 * QTY_SCALE);
+                    }
+                }
+            }
+        }
+    }
+    // あぶれた成人は独身の自活 brain
+    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
+        let e = edible_of[&hid];
+        let rid = world.laws.id_of_index[e];
+        let hs = world.laws.skill_id_of_index[e];
+        let es = world.laws.skill_id_of_index[N_PRIMARY + e];
+        brains.insert(hid, Box::new(FamilyBrain::new(rid, hs, es, None)));
+    }
+
+    let months = years * world.params.months_per_year;
+    run_family_loop(&mut world, &mut brains, &mut edible_of, months);
+
+    // 集計: 出生をペア種別に帰属し、ペア親密度の平均を取る
+    let mut faithful = (0usize, 0u64, 0u64); // (couples, births, intimacy 総和)
+    let mut mixed = (0usize, 0u64, 0u64);
+    let mut intact = (0usize, 0u64); // 両者存命の貞節ペア
+    for &(f, m, phil) in &couples {
+        let births = world
+            .parentage
+            .values()
+            .filter(|&&(mo, fa)| (mo, fa) == (f, m) || (mo, fa) == (m, f))
+            .count() as u64;
+        let intimacy = world.intimacy_of(f, m);
+        let tgt = if phil { &mut mixed } else { &mut faithful };
+        tgt.0 += 1;
+        tgt.1 += births;
+        tgt.2 += intimacy;
+        if !phil && world.humans.contains_key(&f) && world.humans.contains_key(&m) {
+            intact.0 += 1;
+            intact.1 += intimacy;
+        }
+    }
+    MarriageResult {
+        faithful_couples: faithful.0,
+        faithful_births: faithful.1,
+        faithful_mean_intimacy: faithful.2 / (faithful.0 as u64).max(1),
+        faithful_intact_pairs: intact.0,
+        faithful_intact_intimacy: intact.1 / (intact.0 as u64).max(1),
+        mixed_couples: mixed.0,
+        mixed_births: mixed.1,
+        mixed_mean_intimacy: mixed.2 / (mixed.0 as u64).max(1),
+        births: world.births,
+        deaths: world.deaths,
     }
 }
 
@@ -1195,6 +1605,66 @@ mod tests {
                 r.population < 60,
                 "seed {seed}: population exploded to {}",
                 r.population
+            );
+            // 母 vs 父の投資: 双方が子に投資している（贈与か teach の少なくとも一方）
+            assert!(
+                r.mother_invest.0 + r.mother_invest.1 > 0,
+                "seed {seed}: mothers never invested"
+            );
+            assert!(
+                r.father_invest.0 + r.father_invest.1 > 0,
+                "seed {seed}: fathers never invested"
+            );
+        }
+    }
+
+    /// M4 派生実験 1: 同族内婚は技能流入で不利になる。
+    /// 同じ参加者・同じペア数で、組み方（同族内 / 族外）だけを変えると、
+    /// 族外婚の子のほうが多くの harvest 系統を身につける
+    #[test]
+    fn exogamy_brings_more_skills_than_endogamy() {
+        for seed in 1..=3 {
+            let endo = run_m4_clans(seed, false, 30, WorldParams::default());
+            let exo = run_m4_clans(seed, true, 30, WorldParams::default());
+            assert!(
+                endo.grown_children > 0 && exo.grown_children > 0,
+                "seed {seed}: no grown children (endo {}, exo {})",
+                endo.grown_children,
+                exo.grown_children
+            );
+            assert!(
+                exo.child_harvest_skills_permille > endo.child_harvest_skills_permille,
+                "seed {seed}: exogamy {}‰ <= endogamy {}‰ harvest skills per child",
+                exo.child_harvest_skills_permille,
+                endo.child_harvest_skills_permille
+            );
+        }
+    }
+
+    /// M4 派生実験 2: 婚姻契約（相互の贈与均衡）は執行機構なしの繰り返しゲームとして
+    /// 維持される。貞節ペアは高親密度を保って子をもうけ、贈与を薄く広げる浮気者は
+    /// 配偶者との相対親密度が 50% を超えられず子を残せない（未決 #7 の判断材料）
+    #[test]
+    fn marriage_persists_as_repeated_game() {
+        for seed in 1..=3 {
+            let r = run_m4_marriage(seed, 25, WorldParams::default());
+            assert!(
+                r.faithful_couples > 0 && r.mixed_couples > 0,
+                "seed {seed}: bad setup ({} faithful, {} mixed couples)",
+                r.faithful_couples,
+                r.mixed_couples
+            );
+            assert!(
+                r.faithful_births > r.mixed_births,
+                "seed {seed}: faithful {} births <= mixed {} births",
+                r.faithful_births,
+                r.mixed_births
+            );
+            assert!(
+                r.faithful_mean_intimacy > r.mixed_mean_intimacy,
+                "seed {seed}: faithful intimacy {} <= mixed {}",
+                r.faithful_mean_intimacy,
+                r.mixed_mean_intimacy
             );
         }
     }

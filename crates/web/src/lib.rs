@@ -226,12 +226,12 @@ fn wit_snapshot(snap: &Snapshot, fuel_budget: u64) -> SnapshotW {
         acquaintances: snap
             .acquaintances
             .iter()
-            .map(|&(id, intimacy)| AcquaintanceW {
-                id,
-                // apparent-age / last-interaction はエンジン側未実装のスタブ（wasm-host と同じ）
-                apparent_age: 0,
-                alive: true,
-                intimacy,
+            .map(|v| AcquaintanceW {
+                id: v.id,
+                apparent_age: v.apparent_age,
+                alive: v.alive,
+                intimacy: v.intimacy,
+                // last-interaction はエンジン側未実装のスタブ（wasm-host と同じ）
                 last_interaction: None,
             })
             .collect(),
