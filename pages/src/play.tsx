@@ -86,6 +86,12 @@ function Play() {
 
         <main>
           <section class="world">
+            <div class="tabs">
+              <button type="button" id="tabWorld" class="active">
+                🌍 世界
+              </button>
+              <button type="button" id="tabTree">🌳 系図</button>
+            </div>
             <canvas id="world" width="640" height="640"></canvas>
             <div class="legend">
               ○ = 女性（sex&lt;0）　□ = 男性（sex&gt;0）　◇ = 中性　色 =
