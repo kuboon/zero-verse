@@ -32,10 +32,10 @@ pub struct Human {
     pub inventory: BTreeMap<usize, Qty>,
     /// skill 内部 index → 熟練度
     pub skills: BTreeMap<usize, Qty>,
-    /// 学習中の skill → 進捗ポイント（完了で skills へ → docs/design/03-skills.md）
+    /// 学習中の skill → 進捗ポイント（完了で skills へ → pages/content/docs/skills.md）
     pub learning: BTreeMap<usize, u64>,
     pub acquaintances: BTreeSet<HumanId>,
-    /// 生涯消費（食事の Δg 総和の生の積、1/1000^2 スケール → docs/design/07-scoring.md）
+    /// 生涯消費（食事の Δg 総和の生の積、1/1000^2 スケール → pages/content/docs/scoring.md）
     pub consumed_dg: u128,
     /// 今月発生し、来月の snapshot で届くイベント
     pub pending_events: Vec<Event>,
@@ -77,7 +77,7 @@ pub struct World {
     pub re_acquisitions: u64,
     /// 親密度（公理 10）。key は (min, max) の順序付きペア。当事者だけに可視
     pub intimacy: BTreeMap<(HumanId, HumanId), Qty>,
-    /// Westermarck 刷り込みペア（conceive 対象外。→ docs/design/05-kinship.md）
+    /// Westermarck 刷り込みペア（conceive 対象外。→ pages/content/docs/kinship.md）
     pub imprinted: std::collections::BTreeSet<(HumanId, HumanId)>,
     /// 血縁台帳: child → (mother, father)。world 内部とメタ層（採点・継承）専用。
     /// brain には一切露出しない（公理 8: 血縁は観測できない）

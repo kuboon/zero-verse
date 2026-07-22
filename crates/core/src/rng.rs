@@ -24,7 +24,7 @@ pub fn hash4(a: u64, b: u64, c: u64, d: u64) -> u64 {
 }
 
 /// 決定論的確率丸め: exact_num / den の端数を hash で切り上げ/切り捨てする。
-/// docs/design/08-architecture.md「floor 一律だと少量在庫が永遠に腐らない」対策。
+/// pages/content/docs/architecture.md「floor 一律だと少量在庫が永遠に腐らない」対策。
 pub fn div_round_stochastic(exact_num: u128, den: u64, h: u64) -> u64 {
     let q = (exact_num / den as u128) as u64;
     let r = (exact_num % den as u128) as u64;

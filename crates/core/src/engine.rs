@@ -1,6 +1,6 @@
 //! tick パイプライン。
 //!
-//! 月内の固定位相（docs/design/08-architecture.md）:
+//! 月内の固定位相（pages/content/docs/architecture.md）:
 //!   1. 自発変換（劣化）: 環境 + 全 human 在庫
 //!   2. 環境変換（再生）: Φ を上限に廃棄物 → primary、続けて ε 出会い（公理 6）
 //!   3. decide: 全 human 同時手番（lockstep）
@@ -259,7 +259,7 @@ impl World {
         }
 
         // 4. resolve: human-id 昇順、各人 commit 順。不正な宣言は個別に無効。
-        //    月内解決順序（最終形 → docs/design/08-architecture.md）:
+        //    月内解決順序（最終形 → pages/content/docs/architecture.md）:
         //    一方向 act → teach/learn 成立 → conditional-give 判定 → 板マッチング → RE
         let mut fuel_costs: BTreeMap<HumanId, Qty> = BTreeMap::new();
         let mut limit_orders: Vec<(HumanId, crate::brain::StandingOrder)> = Vec::new();
@@ -320,7 +320,7 @@ impl World {
         self.decay_intimacy(month);
         // 4g. Westermarck 刷り込み（fertility 窓が開く前に親密になったペアを除外）
         self.update_imprinting();
-        // 4h. conceive の自動発生（相対親密度の相互条件 → docs/design/05-kinship.md）
+        // 4h. conceive の自動発生（相対親密度の相互条件 → pages/content/docs/kinship.md）
         self.resolve_conception(month);
         // 4i. 出産
         self.resolve_births(month);
@@ -338,12 +338,12 @@ impl World {
             let decay =
                 params.health_decay_per_month + upkeep + fuel_costs.get(&hid).copied().unwrap_or(0);
             human.stats.health = human.stats.health.saturating_sub(decay);
-            // strength は毎月回復する（harvest 等で消費 → docs/design/human.md の能力曲線）
+            // strength は毎月回復する（harvest 等で消費 → pages/content/docs/human.md の能力曲線）
             let strength_cap = 60 * QTY_SCALE;
             human.stats.strength =
                 (human.stats.strength + params.strength_regen_per_month).min(strength_cap);
             human.age_months += 1;
-            // fertility の年齢窓（思春期に開き、閉経で閉じる → docs/design/human.md）
+            // fertility の年齢窓（思春期に開き、閉経で閉じる → pages/content/docs/human.md）
             human.stats.fertility = if human.age_months >= params.puberty_months
                 && human.age_months < params.menopause_months
             {
@@ -361,7 +361,7 @@ impl World {
                 dead.push(hid);
             }
         }
-        // 死亡時還元: 保有 resource を環境へ（相続は生前贈与で → docs/design/world.md）
+        // 死亡時還元: 保有 resource を環境へ（相続は生前贈与で → pages/content/docs/world.md）
         for hid in dead {
             if let Some(h) = self.humans.remove(&hid) {
                 for (idx, amt) in h.inventory {
@@ -392,7 +392,7 @@ impl World {
     /// 見かけの年齢（年）。実年齢そのものは他人に見えず、この値だけが観測される。
     /// apparent-age = age × (1 + β(1 − vitality))。vitality は health・strength の
     /// 合成なので、若く見せるには実コストがかかる正直なシグナルになる
-    ///（→ docs/design/human.md。年齢標準曲線に対する比は将来拡張）。
+    ///（→ pages/content/docs/human.md。年齢標準曲線に対する比は将来拡張）。
     pub fn apparent_age_years(&self, h: &crate::state::Human) -> u32 {
         let vit =
             (h.stats.health.min(STAT_MAX) + h.stats.strength.min(STAT_MAX)) * 1000 / (2 * STAT_MAX);
@@ -596,7 +596,7 @@ impl World {
     }
 
     /// teach/learn の解決。同月に (teacher, student, skill) の宣言が対をなしたものだけ
-    /// 1 ヶ月分進捗する（docs/design/03-skills.md）。返り値は今月成立した組。
+    /// 1 ヶ月分進捗する（pages/content/docs/skills.md）。返り値は今月成立した組。
     fn resolve_teaching(
         &mut self,
         teaches: Vec<(HumanId, HumanId, u64)>,
@@ -691,7 +691,7 @@ impl World {
         taught
     }
 
-    /// conditional-give の判定（docs/design/04-market.md の give-condition）。
+    /// conditional-give の判定（pages/content/docs/market.md の give-condition）。
     /// if-received は 2 パス評価: 相互の cond-give 同士でも同月内で成立できる。
     fn resolve_conditional_gives(
         &mut self,
@@ -760,7 +760,7 @@ impl World {
             .unwrap_or(0)
     }
 
-    /// リバースエンジニアリング（docs/design/03-skills.md）:
+    /// リバースエンジニアリング（pages/content/docs/skills.md）:
     /// 板に売りを出した resource は、それを作る skill を確率的に漏らす。
     /// primary i の売り → harvest_i、waste i の売り → eat_i（skill 内部 index は一致）。
     fn resolve_reverse_engineering(&mut self, month: u32) {
@@ -954,7 +954,7 @@ impl World {
                 human.inventory.retain(|_, v| *v > 0);
                 *human.inventory.entry(waste).or_insert(0) += amt;
                 human.stats.health = clamp_stat(human.stats.health + gain);
-                // 消費 = 食事の Δg（docs/design/07-scoring.md）。生の積で積算
+                // 消費 = 食事の Δg（pages/content/docs/scoring.md）。生の積で積算
                 human.consumed_dg += amt as u128 * dg as u128;
                 let skill_pub = self.laws.skill_id_of_index[skill_idx];
                 let res_pub = self.laws.id_of_index[p];

@@ -1,4 +1,4 @@
 target/
 Cargo.lock
-docs/_site
-docs/.jekyll-cache
+pages/dist/
+pages/node_modules/

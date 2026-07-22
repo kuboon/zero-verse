@@ -63,7 +63,7 @@ jobs:
           b="$(run | grep 'state hash')"
           test "$a" = "$b"
 
-  # ブラウザ実行系（docs/viewer/）: エンジンを wasm-bindgen で、component を
+  # ブラウザ実行系（pages/static/play/）: エンジンを wasm-bindgen で、component を
   # jco transpile で接続する経路を node でヘッドレス検証する（実行経路はビューワと同一）
   web:
     runs-on: ubuntu-latest
@@ -92,3 +92,17 @@ jobs:
       - run: ./scripts/build-web.sh
       - name: browser-path smoke (node)
         run: node scripts/smoke-web.mjs
+
+  # サイト（pages/）: 型チェック・lint・SSG ビルドが通ること
+  pages:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pages
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task check
+      - run: deno task build

@@ -1,6 +1,6 @@
 // zeroverse scenario component interface (v0.1)
 //
-// シナリオ = 生成パイプラインへの入力一式 + クリア条件（docs/design/world.md）。
+// シナリオ = 生成パイプラインへの入力一式 + クリア条件（pages/content/docs/world.md）。
 // クリア条件の記述形式は「wasm component の judge 関数」として実装する。
 // scenario はメタ層（エンジン側の観測者）であり、brain と違って world の内部
 // index（primary 0..4 など）を知ってよい。判定は world 内のルールに介入しない。
