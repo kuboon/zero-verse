@@ -188,6 +188,89 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 
+const WebExperimentFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_webexperiment_free(ptr >>> 0, 1));
+/**
+ * M1〜M4 実験セッション。brains は zeroverse-core のネイティブ参照実装で、
+ * CLI（zeroverse m1 / m2 / m3 / m4 / m4-clans / m4-marriage）と同一のビルダー・
+ * 遷移・集計を共有する。同一シードなら CLI と同じ歴史（state hash）を辿る。
+ */
+export class WebExperiment {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WebExperimentFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_webexperiment_free(ptr, 0);
+    }
+    /**
+     * kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
+     *       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
+     * @param {string} kind
+     * @param {bigint} seed
+     */
+    constructor(kind, seed) {
+        const ptr0 = passStringToWasm0(kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webexperiment_new(ptr0, len0, seed);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        WebExperimentFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {number} months
+     */
+    step(months) {
+        wasm.webexperiment_step(this.__wbg_ptr, months);
+    }
+    /**
+     * @returns {number}
+     */
+    alive() {
+        const ret = wasm.webexperiment_alive(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    month() {
+        const ret = wasm.webexperiment_month(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * ビューワ用の全知ビュー（WebWorld::state と同形。role に役割ラベル入り）。
+     * @returns {any}
+     */
+    state() {
+        const ret = wasm.webexperiment_state(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * 現時点の実験サマリ: [ラベル, 値] の配列（CLI と同じ集計）。
+     * @returns {any}
+     */
+    summary() {
+        const ret = wasm.webexperiment_summary(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+if (Symbol.dispose) WebExperiment.prototype[Symbol.dispose] = WebExperiment.prototype.free;
+
 const WebWorldFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_webworld_free(ptr >>> 0, 1));

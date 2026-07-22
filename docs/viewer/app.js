@@ -102,20 +102,33 @@ function applyState(s, extra = []) {
 
 // --- 初期化・実行ループ ---------------------------------------------------------
 
+function isExperimentSelected() {
+  return $('campaign').value.startsWith('exp-');
+}
+
+function syncScenarioControls() {
+  const isExp = isExperimentSelected();
+  // 実験再現は brain 内蔵（CLI と同一のネイティブ参照実装）なので brain 選択は無効
+  $('brain').disabled = isExp;
+  $('judge').textContent = isExp ? '📊 集計' : '⚖ 判定';
+}
+
 async function init() {
   running = false;
   series = [];
   seats.clear();
+  roleColorMap.clear();
   selected = null;
   owed = 0;
   banner('ロード中…');
   setControls({ loaded: false });
+  syncScenarioControls();
   newWorker();
   try {
     const seed = Math.max(0, Math.floor(Number($('seed').value) || 0));
     const r = await rpc(
       'init',
-      { seed, campaign: $('campaign').value, brain: $('brain').value },
+      { seed, scenario: $('campaign').value, brain: $('brain').value },
       60000,
     );
     banner(null);
@@ -162,11 +175,17 @@ async function stepOnce(months) {
 async function judge() {
   try {
     const r = await rpc('judge', {}, 20000);
-    const v = r.verdict;
-    banner(
-      `判定: ${v.cleared ? 'クリア 🎉' : '未達'}  score=${v.score}  ${v.note}`,
-      v.cleared ? 'ok' : '',
-    );
+    const res = r.result;
+    if (res.type === 'summary') {
+      const y = state ? `${Math.floor(state.month / 12)}年${state.month % 12}月` : '';
+      const lines = res.lines.map(([label, value]) => `${label}: ${value}`).join('\n');
+      banner(`実験サマリ（${y}時点。CLI と同一の集計）\n${lines}`, 'ok');
+    } else {
+      banner(
+        `判定: ${res.cleared ? 'クリア 🎉' : '未達'}  score=${res.score}  ${res.note}`,
+        res.cleared ? 'ok' : '',
+      );
+    }
   } catch (e) {
     banner(`判定失敗: ${e.message}`, 'err');
   }
@@ -189,6 +208,23 @@ function seatPos(i, w, h) {
 function healthColor(health) {
   const t = Math.max(0, Math.min(1, health / 100000));
   return `hsl(${(t * 120).toFixed(0)} 70% 52%)`;
+}
+
+// 役割（実験再現ランの群）ごとの色。初期成人の役割は engine から、
+// 子は血縁台帳から導出する
+const ROLE_COLORS = ['#4fc3f7', '#ffb74d', '#ba68c8', '#e57373', '#fff176', '#90a4ae', '#f06292'];
+const roleColorMap = new Map();
+function colorForRole(role) {
+  if (!roleColorMap.has(role)) {
+    roleColorMap.set(role, ROLE_COLORS[roleColorMap.size % ROLE_COLORS.length]);
+  }
+  return roleColorMap.get(role);
+}
+function roleOf(h, childSet) {
+  return h.role ?? (childSet.has(h.id) ? '子' : null);
+}
+function childSetOf(s) {
+  return new Set(s.parentage.map((p) => p.child));
 }
 
 function draw() {
@@ -230,12 +266,16 @@ function draw() {
   ctx.setLineDash([]);
 
   hitboxes = [];
+  const childSet = childSetOf(state);
+  const rolesPresent = new Set();
   for (const h of humans) {
     const [x, y] = pos.get(h.id);
     const r = 5 + Math.min(7, (h.ageMonths / 12) * 0.14);
+    const role = roleOf(h, childSet);
+    if (role) rolesPresent.add(role);
     ctx.fillStyle = healthColor(h.health);
-    ctx.strokeStyle = '#0e1014';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = role ? colorForRole(role) : '#0e1014';
+    ctx.lineWidth = role ? 2 : 1;
     if (h.sex === 'F') {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -265,6 +305,11 @@ function draw() {
     ctx.fillText(h.id.slice(-4), x, y + r + 10);
     hitboxes.push({ x, y, r: r + 6, id: h.id });
   }
+
+  // 役割の凡例（枠線の色）
+  $('roleLegend').innerHTML = [...rolesPresent]
+    .map((role) => `<span style="color:${colorForRole(role)}">◯</span> ${role}`)
+    .join('　');
 }
 
 // --- 描画: 推移チャート ---------------------------------------------------------
@@ -356,9 +401,11 @@ function drawInspector() {
     return;
   }
   const acq = [...h.acquaintances].sort((a, b) => b.intimacy - a.intimacy);
+  const role = roleOf(h, childSetOf(state));
   el.innerHTML = `
     <h2>human ${h.id.slice(-4)} <span class="dim">(${h.id})</span></h2>
     <table>
+      ${role ? `<tr><th>役割</th><td colspan="2"><span style="color:${colorForRole(role)}">◯</span> ${role}</td></tr>` : ''}
       <tr><th>性別</th><td colspan="2">${h.sex === 'F' ? '女性 ○' : '男性 □'}${h.pregnant ? '（妊娠中）' : ''}</td></tr>
       <tr><th>年齢</th><td colspan="2">${Math.floor(h.ageMonths / 12)}歳${h.ageMonths % 12}ヶ月</td></tr>
       ${statRow('health', h.health)}
@@ -407,6 +454,7 @@ function drawInspector() {
 // --- イベント配線 ---------------------------------------------------------------
 
 $('reset').addEventListener('click', init);
+$('campaign').addEventListener('change', syncScenarioControls);
 $('play').addEventListener('click', () => {
   if (!state) return;
   running = !running;

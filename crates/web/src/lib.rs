@@ -538,6 +538,8 @@ struct VizAcq {
 struct VizHuman {
     id: String,
     group: Option<u32>,
+    /// 実験再現ランでの役割ラベル（凡例・色分け用。キャンペーンでは None）
+    role: Option<String>,
     sex: String,
     age_months: u32,
     health: u64,
@@ -728,117 +730,7 @@ impl WebWorld {
 
     /// ビューワ用の全知ビュー。id は精度保持のため文字列、qty は Number。
     pub fn state(&self) -> Result<JsValue, JsValue> {
-        let laws = &self.world.laws;
-        let humans = self
-            .world
-            .humans
-            .values()
-            .map(|h| VizHuman {
-                id: h.id.to_string(),
-                group: self.groups.get(&h.id).copied(),
-                sex: match h.sex {
-                    Sex::Female => "F".into(),
-                    Sex::Male => "M".into(),
-                },
-                age_months: h.age_months,
-                health: h.stats.health,
-                strength: h.stats.strength,
-                cognition: h.stats.cognition,
-                fertility: h.stats.fertility,
-                pregnant: h.pregnant.is_some(),
-                space_used: h.space_used(laws, &self.world.params),
-                consumed_dg: h.consumed_dg as f64 / 1_000_000.0,
-                memory_len: h.memory.len() as u32,
-                inventory: h
-                    .inventory
-                    .iter()
-                    .map(|(&idx, &amount)| VizStack {
-                        idx: idx as u32,
-                        id: laws.id_of_index[idx].to_string(),
-                        amount,
-                        is_waste: idx >= zeroverse_core::laws::N_PRIMARY,
-                    })
-                    .collect(),
-                skills: h
-                    .skills
-                    .iter()
-                    .map(|(&idx, &proficiency)| VizSkill {
-                        idx: idx as u32,
-                        id: laws.skill_id_of_index[idx].to_string(),
-                        kind: match laws.skills[idx] {
-                            SkillKind::Harvest(i) => format!("harvest{i}"),
-                            SkillKind::Eat(i) => format!("eat{i}"),
-                        },
-                        proficiency,
-                    })
-                    .collect(),
-                acquaintances: h
-                    .acquaintances
-                    .iter()
-                    .map(|&a| VizAcq {
-                        id: a.to_string(),
-                        intimacy: self.world.intimacy_of(h.id, a),
-                    })
-                    .collect(),
-                pending_events: h.pending_events.iter().map(|e| format!("{e:?}")).collect(),
-            })
-            .collect();
-        let state = VizState {
-            month: self.world.month,
-            alive: self.world.humans.len() as u32,
-            deaths: self.world.deaths,
-            births: self.world.births,
-            total_space: self.world.params.total_space,
-            space_used: self.world.space_used_total(),
-            env: self
-                .world
-                .env
-                .iter()
-                .enumerate()
-                .map(|(idx, &stock)| VizEnv {
-                    idx: idx as u32,
-                    stock,
-                    g: laws.specs[idx].g,
-                    volume: laws.specs[idx].volume,
-                    decay_permille: laws.specs[idx].decay_permille,
-                    is_waste: idx >= zeroverse_core::laws::N_PRIMARY,
-                })
-                .collect(),
-            humans,
-            quotes: self
-                .world
-                .last_quotes
-                .iter()
-                .map(|&(seller, gi, ga, wi, wa)| VizQuote {
-                    seller: seller.to_string(),
-                    give_idx: gi as u32,
-                    give_amount: ga,
-                    want_idx: wi as u32,
-                    want_amount: wa,
-                })
-                .collect(),
-            intimacy: self
-                .world
-                .intimacy
-                .iter()
-                .map(|(&(a, b), &v)| VizIntimacy {
-                    a: a.to_string(),
-                    b: b.to_string(),
-                    v,
-                })
-                .collect(),
-            parentage: self
-                .world
-                .parentage
-                .iter()
-                .map(|(&c, &(m, f))| VizParentage {
-                    child: c.to_string(),
-                    mother: m.to_string(),
-                    father: f.to_string(),
-                })
-                .collect(),
-            state_hash: format!("{:016x}", self.world.state_hash()),
-        };
+        let state = viz_state(&self.world, &self.groups, None);
         serde_wasm_bindgen::to_value(&state).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
@@ -874,6 +766,180 @@ impl WebWorld {
             serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
         report
             .serialize(&ser)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+}
+
+/// 全知ビューの構築（WebWorld / WebExperiment が共有）。
+fn viz_state(
+    world: &World,
+    groups: &BTreeMap<HumanId, u32>,
+    roles: Option<&BTreeMap<HumanId, &'static str>>,
+) -> VizState {
+    {
+        let laws = &world.laws;
+        let humans = world
+            .humans
+            .values()
+            .map(|h| VizHuman {
+                id: h.id.to_string(),
+                group: groups.get(&h.id).copied(),
+                role: roles
+                    .and_then(|r| r.get(&h.id).copied())
+                    .map(|s| s.to_string()),
+                sex: match h.sex {
+                    Sex::Female => "F".into(),
+                    Sex::Male => "M".into(),
+                },
+                age_months: h.age_months,
+                health: h.stats.health,
+                strength: h.stats.strength,
+                cognition: h.stats.cognition,
+                fertility: h.stats.fertility,
+                pregnant: h.pregnant.is_some(),
+                space_used: h.space_used(laws, &world.params),
+                consumed_dg: h.consumed_dg as f64 / 1_000_000.0,
+                memory_len: h.memory.len() as u32,
+                inventory: h
+                    .inventory
+                    .iter()
+                    .map(|(&idx, &amount)| VizStack {
+                        idx: idx as u32,
+                        id: laws.id_of_index[idx].to_string(),
+                        amount,
+                        is_waste: idx >= zeroverse_core::laws::N_PRIMARY,
+                    })
+                    .collect(),
+                skills: h
+                    .skills
+                    .iter()
+                    .map(|(&idx, &proficiency)| VizSkill {
+                        idx: idx as u32,
+                        id: laws.skill_id_of_index[idx].to_string(),
+                        kind: match laws.skills[idx] {
+                            SkillKind::Harvest(i) => format!("harvest{i}"),
+                            SkillKind::Eat(i) => format!("eat{i}"),
+                        },
+                        proficiency,
+                    })
+                    .collect(),
+                acquaintances: h
+                    .acquaintances
+                    .iter()
+                    .map(|&a| VizAcq {
+                        id: a.to_string(),
+                        intimacy: world.intimacy_of(h.id, a),
+                    })
+                    .collect(),
+                pending_events: h.pending_events.iter().map(|e| format!("{e:?}")).collect(),
+            })
+            .collect();
+        VizState {
+            month: world.month,
+            alive: world.humans.len() as u32,
+            deaths: world.deaths,
+            births: world.births,
+            total_space: world.params.total_space,
+            space_used: world.space_used_total(),
+            env: world
+                .env
+                .iter()
+                .enumerate()
+                .map(|(idx, &stock)| VizEnv {
+                    idx: idx as u32,
+                    stock,
+                    g: laws.specs[idx].g,
+                    volume: laws.specs[idx].volume,
+                    decay_permille: laws.specs[idx].decay_permille,
+                    is_waste: idx >= zeroverse_core::laws::N_PRIMARY,
+                })
+                .collect(),
+            humans,
+            quotes: world
+                .last_quotes
+                .iter()
+                .map(|&(seller, gi, ga, wi, wa)| VizQuote {
+                    seller: seller.to_string(),
+                    give_idx: gi as u32,
+                    give_amount: ga,
+                    want_idx: wi as u32,
+                    want_amount: wa,
+                })
+                .collect(),
+            intimacy: world
+                .intimacy
+                .iter()
+                .map(|(&(a, b), &v)| VizIntimacy {
+                    a: a.to_string(),
+                    b: b.to_string(),
+                    v,
+                })
+                .collect(),
+            parentage: world
+                .parentage
+                .iter()
+                .map(|(&c, &(m, f))| VizParentage {
+                    child: c.to_string(),
+                    mother: m.to_string(),
+                    father: f.to_string(),
+                })
+                .collect(),
+            state_hash: format!("{:016x}", world.state_hash()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WebExperiment: M1〜M4 実験の再現ラン（ネイティブ brain をブラウザ wasm 内で駆動）
+// ---------------------------------------------------------------------------
+
+/// M1〜M4 実験セッション。brains は zeroverse-core のネイティブ参照実装で、
+/// CLI（zeroverse m1 / m2 / m3 / m4 / m4-clans / m4-marriage）と同一のビルダー・
+/// 遷移・集計を共有する。同一シードなら CLI と同じ歴史（state hash）を辿る。
+#[wasm_bindgen]
+pub struct WebExperiment {
+    session: zeroverse_core::scenarios::ExperimentSession,
+}
+
+#[wasm_bindgen]
+impl WebExperiment {
+    /// kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
+    ///       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
+    #[wasm_bindgen(constructor)]
+    pub fn new(kind: &str, seed: u64) -> Result<WebExperiment, JsValue> {
+        console_error_panic_hook::set_once();
+        let session = zeroverse_core::scenarios::ExperimentSession::new(kind, seed)
+            .ok_or_else(|| JsValue::from_str(&format!("unknown experiment kind: {kind}")))?;
+        Ok(WebExperiment { session })
+    }
+
+    pub fn step(&mut self, months: u32) {
+        for _ in 0..months {
+            self.session.step_month();
+        }
+    }
+
+    pub fn month(&self) -> u32 {
+        self.session.world.month
+    }
+
+    pub fn alive(&self) -> u32 {
+        self.session.world.humans.len() as u32
+    }
+
+    /// ビューワ用の全知ビュー（WebWorld::state と同形。role に役割ラベル入り）。
+    pub fn state(&self) -> Result<JsValue, JsValue> {
+        let state = viz_state(
+            &self.session.world,
+            &BTreeMap::new(),
+            Some(&self.session.roles),
+        );
+        serde_wasm_bindgen::to_value(&state).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// 現時点の実験サマリ: [ラベル, 値] の配列（CLI と同じ集計）。
+    pub fn summary(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.session.summary())
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }
