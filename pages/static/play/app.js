@@ -15,6 +15,7 @@ let busy = false; // step RPC 実行中
 let owed = 0; // 消化していない月数
 let lastT = 0;
 let selected = null; // 選択中 human id
+let viewMode = 'world'; // 'world' | 'tree' 
 const seats = new Map(); // human id → 配置番号（安定）
 let hitboxes = []; // {x, y, r, id}
 
@@ -234,7 +235,59 @@ function childSetOf(s) {
   return new Set(s.parentage.map((p) => p.child));
 }
 
+// ノード 1 個の描画（世界ビューと系図ビューで共通）。
+// dead は灰色 + †、shape は sex の符号（故人で sex 不明なら役割から推定した値を渡す）
+function drawNode(ctx, { x, y, r, sex, fill, stroke, strokeWidth, label, dead, pregnant, isSelected }) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = strokeWidth;
+  if (sex < 0) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (sex > 0) {
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (pregnant) {
+    ctx.strokeStyle = '#f48fb1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (isSelected) {
+    ctx.strokeStyle = '#ffd54f';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = dead ? '#5c6370' : '#7c8494';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x, y + r + 10);
+}
+
 function draw() {
+  if (viewMode === 'tree') {
+    drawTree();
+  } else {
+    drawWorld();
+  }
+}
+
+function drawWorld() {
   const cv = $('world');
   const ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -280,45 +333,19 @@ function draw() {
     const r = 5 + Math.min(7, (h.ageMonths / 12) * 0.14);
     const role = roleOf(h, childSet);
     if (role) rolesPresent.add(role);
-    ctx.fillStyle = healthColor(h.health);
-    ctx.strokeStyle = role ? colorForRole(role) : '#0e1014';
-    ctx.lineWidth = role ? 2 : 1;
-    if (h.sex < 0) {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else if (h.sex > 0) {
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      ctx.strokeRect(x - r, y - r, r * 2, r * 2);
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-    if (h.pregnant) {
-      ctx.strokeStyle = '#f48fb1';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (h.id === selected) {
-      ctx.strokeStyle = '#ffd54f';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#7c8494';
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(h.id.slice(-4), x, y + r + 10);
+    drawNode(ctx, {
+      x,
+      y,
+      r,
+      sex: h.sex,
+      fill: healthColor(h.health),
+      stroke: role ? colorForRole(role) : '#0e1014',
+      strokeWidth: role ? 2 : 1,
+      label: h.id.slice(-4),
+      dead: false,
+      pregnant: h.pregnant,
+      isSelected: h.id === selected,
+    });
     hitboxes.push({ x, y, r: r + 6, id: h.id });
   }
 
@@ -326,6 +353,153 @@ function draw() {
   $('roleLegend').innerHTML = [...rolesPresent]
     .map((role) => `<span style="color:${colorForRole(role)}">◯</span> ${role}`)
     .join('　');
+}
+
+// --- 描画: 家系図 ---------------------------------------------------------------
+//
+// parentage（全知ビュー）から世代レイヤーを組み、夫婦を桃線・親子を灰線で結ぶ。
+// 故人は world から消えているので灰色 + † で描く（sex は親役割から推定: 母 = ○、父 = □）
+
+function drawTree() {
+  const cv = $('world');
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  hitboxes = [];
+  if (!state) return;
+  if (state.parentage.length === 0) {
+    ctx.fillStyle = '#7c8494';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('まだ家系がありません（出生が起きると系図が生えます）', cv.width / 2, cv.height / 2);
+    $('roleLegend').innerHTML = '';
+    return;
+  }
+
+  // 夫婦（= 共に子を持つペア）と世代
+  const couples = new Map();
+  for (const p of state.parentage) {
+    const key = `${p.mother}|${p.father}`;
+    if (!couples.has(key)) couples.set(key, { mother: p.mother, father: p.father, children: [] });
+    couples.get(key).children.push(p.child);
+  }
+  const parentOf = new Map(state.parentage.map((p) => [p.child, p]));
+  const gen = new Map();
+  const genOf = (id, depth = 0) => {
+    if (gen.has(id)) return gen.get(id);
+    const p = parentOf.get(id);
+    const g = p && depth < 32 ? Math.max(genOf(p.mother, depth + 1), genOf(p.father, depth + 1)) + 1 : 0;
+    gen.set(id, g);
+    return g;
+  };
+  const ids = new Set();
+  for (const p of state.parentage) {
+    ids.add(p.child);
+    ids.add(p.mother);
+    ids.add(p.father);
+  }
+  for (const id of ids) genOf(id);
+  const maxGen = Math.max(...gen.values());
+
+  // 行ごとの並び: 夫婦の相方を隣接させ、子は夫婦単位でまとめる
+  const rows = Array.from({ length: maxGen + 1 }, () => []);
+  const placed = new Set();
+  const place = (id) => {
+    if (!placed.has(id)) {
+      rows[gen.get(id)].push(id);
+      placed.add(id);
+    }
+  };
+  for (const c of couples.values()) {
+    place(c.mother);
+    place(c.father);
+    for (const ch of c.children) place(ch);
+  }
+  for (const id of ids) place(id);
+
+  // 世代間隔は詰める（世代が少ないときに間延びしない）。
+  // 子は「両親の中点」に近い順で並べ、親の下に来るようにする（交差の削減）
+  const rowH = Math.min(150, (cv.height - 110) / Math.max(1, maxGen));
+  const rowY = (g) => 50 + g * rowH;
+  const pos = new Map();
+  rows.forEach((row, g) => {
+    const desired = row.map((id, i) => {
+      const p = parentOf.get(id);
+      if (p && pos.has(p.mother) && pos.has(p.father)) {
+        return [(pos.get(p.mother)[0] + pos.get(p.father)[0]) / 2, id];
+      }
+      return [i * 10000, id]; // 親が上段にいない（始祖）は元の並び順を維持
+    });
+    desired.sort((a, b) => a[0] - b[0]);
+    desired.forEach(([, id], i) => {
+      pos.set(id, [((i + 1) * cv.width) / (row.length + 1), rowY(g)]);
+    });
+  });
+
+  // 夫婦リンク（桃）と親子リンク（灰）
+  for (const c of couples.values()) {
+    const pm = pos.get(c.mother);
+    const pf = pos.get(c.father);
+    ctx.strokeStyle = 'rgba(233, 30, 99, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pm[0], pm[1]);
+    ctx.lineTo(pf[0], pf[1]);
+    ctx.stroke();
+    const mid = [(pm[0] + pf[0]) / 2, (pm[1] + pf[1]) / 2];
+    ctx.strokeStyle = 'rgba(160, 160, 160, 0.6)';
+    ctx.lineWidth = 1;
+    for (const ch of c.children) {
+      const pc = pos.get(ch);
+      ctx.beginPath();
+      ctx.moveTo(mid[0], mid[1]);
+      ctx.lineTo(pc[0], pc[1]);
+      ctx.stroke();
+    }
+  }
+
+  // ノード（故人は灰 + †。sex 不明の故人は親役割から推定）
+  const mothers = new Set(state.parentage.map((p) => p.mother));
+  const fathers = new Set(state.parentage.map((p) => p.father));
+  const childSet = childSetOf(state);
+  for (const id of ids) {
+    const [x, y] = pos.get(id);
+    const h = state.humans.find((hh) => hh.id === id);
+    if (h) {
+      const role = roleOf(h, childSet);
+      drawNode(ctx, {
+        x,
+        y,
+        r: 8,
+        sex: h.sex,
+        fill: healthColor(h.health),
+        stroke: role ? colorForRole(role) : '#0e1014',
+        strokeWidth: role ? 2 : 1,
+        label: h.id.slice(-4),
+        dead: false,
+        pregnant: h.pregnant,
+        isSelected: h.id === selected,
+      });
+      hitboxes.push({ x, y, r: 14, id });
+    } else {
+      const sex = mothers.has(id) ? -1 : fathers.has(id) ? 1 : 0;
+      drawNode(ctx, {
+        x,
+        y,
+        r: 8,
+        sex,
+        fill: '#3a3f4a',
+        stroke: '#5c6370',
+        strokeWidth: 1,
+        label: `${id.slice(-4)}†`,
+        dead: true,
+        pregnant: false,
+        isSelected: false,
+      });
+    }
+  }
+
+  $('roleLegend').innerHTML =
+    '桃線 = 夫婦（子を持つペア）　灰線 = 親子　灰ノード† = 故人　世代が上から下へ';
 }
 
 // --- 描画: 推移チャート ---------------------------------------------------------
@@ -481,6 +655,17 @@ $('play').addEventListener('click', () => {
 $('step1').addEventListener('click', () => stepOnce(1));
 $('step12').addEventListener('click', () => stepOnce(12));
 $('judge').addEventListener('click', judge);
+for (const [btn, mode] of [
+  ['tabWorld', 'world'],
+  ['tabTree', 'tree'],
+]) {
+  $(btn).addEventListener('click', () => {
+    viewMode = mode;
+    $('tabWorld').classList.toggle('active', mode === 'world');
+    $('tabTree').classList.toggle('active', mode === 'tree');
+    draw();
+  });
+}
 $('speed').addEventListener('input', () => {
   $('speedLabel').textContent = `${SPEEDS[$('speed').value]} 月/秒`;
 });
