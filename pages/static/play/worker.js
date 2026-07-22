@@ -46,8 +46,11 @@ async function handle(cmd, args) {
     if (!engine) {
       engine = await loadEngine(new URL('gen/engine/', import.meta.url));
     }
-    const sc = SCENARIOS[args.scenario];
-    if (!sc) throw new Error(`unknown scenario: ${args.scenario}`);
+    // args.campaign はプロトコル v1（旧 app.js）の互換。キャッシュ由来の
+    // 旧 app + 新 worker の組でも campaign-m1 として動くようにする
+    const key = args.scenario ?? (args.campaign ? `campaign-${args.campaign}` : undefined);
+    const sc = SCENARIOS[key];
+    if (!sc) throw new Error(`unknown scenario: ${key}`);
 
     if (sc.type === 'experiment') {
       const world = new engine.WebExperiment(sc.kind, BigInt(args.seed));
