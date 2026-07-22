@@ -20,11 +20,18 @@ let hitboxes = []; // {x, y, r, id}
 
 // --- worker RPC ---------------------------------------------------------------
 
+// app.js ↔ worker.js のプロトコル版。init の引数や応答の形を変えたら上げる。
+// worker URL のクエリに付けて、HTTP キャッシュ由来の新旧取り違え
+// （新 app + 旧 worker）でプロトコルがずれるのを防ぐ
+const PROTOCOL_VERSION = 2;
+
 function newWorker() {
   if (worker) worker.terminate();
   pending.clear();
   busy = false;
-  worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
+  worker = new Worker(new URL(`worker.js?v=${PROTOCOL_VERSION}`, import.meta.url), {
+    type: 'module',
+  });
   worker.onmessage = (e) => {
     const { id, ok, error, ...result } = e.data;
     const p = pending.get(id);
