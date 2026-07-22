@@ -58,4 +58,22 @@ if (!verdict.cleared) {
   console.error('FAIL: scenario not cleared');
   process.exit(1);
 }
+
+// 実験再現ラン（WebExperiment）: 集計が出ること + 決定論
+for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
+  const a = new engine.WebExperiment(kind, 7n);
+  a.step(10 * 12);
+  const lines = a.summary();
+  const b = new engine.WebExperiment(kind, 7n);
+  b.step(10 * 12);
+  if (a.state().stateHash !== b.state().stateHash) {
+    console.error(`FAIL: experiment ${kind} not deterministic`);
+    process.exit(1);
+  }
+  if (!Array.isArray(lines) || lines.length === 0) {
+    console.error(`FAIL: experiment ${kind} summary empty`);
+    process.exit(1);
+  }
+  console.log(`exp ${kind}: alive=${a.alive()} ${lines[0][0]}=${lines[0][1]}`);
+}
 console.log('smoke ok');

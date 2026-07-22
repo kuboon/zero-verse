@@ -203,6 +203,7 @@ summary: フェーズ分割・マイルストーン・合格基準
 - **実装形態**: ブラウザは component model をネイティブ実行できないため、engine（`crates/web`）を wasm-bindgen で core wasm 化し、brain / scenario component は **jco transpile**（`--instantiation sync`）で core wasm + JS glue に変換して接続する（`pages/static/play/runtime.js` が wasmtime Linker 相当）。decide ごとの新規インスタンス化（テレパシー禁止）は glue 側で維持。実行は Web Worker に隔離し、応答しない brain は watchdog が worker ごと terminate する。
 - **決定論**: 同一シードのブラウザ実行はネイティブ実行と **state hash が一致**する（fuel 消費が 1 health 量子未満の brain の場合。ビューワには fuel 計量が無く fuel_used = 0 のため、fuel を大きく消費する brain ではネイティブと歴史が分かれる）。公式ランはネイティブ側。
 - **fuel が無いことの副作用**として forager の実験ループに無限ループを発見・修正（全組が既知になると `continue` し続ける。ネイティブでは fuel 切れが打ち切っていて、毎月 fuel 予算を全焼していた）。
+- **実験再現シナリオ**（追補）: シナリオ選択に M1（交易 vs 自給自足）/ M2（貨幣の創発）/ M3（公開・秘匿教師）/ M4（家族）/ M4 派生（同族内婚・族外婚・婚姻契約）を追加。brains は zeroverse-core のネイティブ参照実装をブラウザ wasm 内で駆動し、**CLI の run_* とビルダー・月遷移・集計を共有**する（`ExperimentSession`。同一シードなら CLI と同一の state hash）。役割（交易 / 自給自足 / 教師 / 徒弟 / 貞節 / 浮気者 / 氏族 / 子）を枠線色で可視化し、📊 集計ボタンで CLI と同じサマリを任意時点で表示する。
 - 持ち越し: 自作 brain（.wasm）のドラッグ&ドロップ実行（jco はブラウザ内 transpile も可能なので実現性あり）、リプレイ共有 URL（シード + 選択の埋め込み）、家系図・価格チャートビュー。
 
 ---
