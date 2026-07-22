@@ -6,7 +6,7 @@
 //!
 //! skill は primary ごとに 2 種（計 10 種）:
 //! - harvest_i: strength を消費して環境から primary i を採取（獲得量はストック残量依存）
-//! - eat_i:     primary i を health + waste i に変換（食文化 → docs/design/03-skills.md）
+//! - eat_i:     primary i を health + waste i に変換（食文化 → pages/content/docs/skills.md）
 //!
 //! 組成が同一ペア間の 1:1 変換なので、組成保存は構造的に厳密。
 //! M2+ でここを本物の手続き的化学（craft 連鎖・深い skill）に拡張する。
@@ -120,7 +120,7 @@ impl LawGraph {
         (p.g - w.g) / QTY_SCALE.max(1)
     }
 
-    /// 食事 1.000 単位あたりの自由エネルギー差 Δg（消費計測 → docs/design/07-scoring.md）
+    /// 食事 1.000 単位あたりの自由エネルギー差 Δg（消費計測 → pages/content/docs/scoring.md）
     pub fn eat_delta_g(&self, primary: usize) -> Qty {
         let p = &self.specs[primary];
         let w = &self.specs[p.decay_into];

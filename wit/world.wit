@@ -1,10 +1,10 @@
 // zeroverse brain ⇔ engine interface (P0-1 確定版 v0.1)
 //
-// 設計の背景は docs/design/ を参照。特に:
-//   - docs/design/09-wit-draft.md  … 分散マップと不変の原則
-//   - docs/design/human.md         … observation / action / commit
-//   - docs/design/02-resources.md  … resource / invoke
-//   - docs/design/04-market.md     … standing order / 板
+// 設計の背景は pages/content/docs/ を参照。特に:
+//   - pages/content/docs/wit.md  … 分散マップと不変の原則
+//   - pages/content/docs/human.md         … observation / action / commit
+//   - pages/content/docs/resources.md  … resource / invoke
+//   - pages/content/docs/market.md     … standing order / 板
 //
 // 不変の原則（型を変えても守る）:
 //   1. decide はステートレス。月を跨ぐ状態は memory blob のみ。出力は commit への積み上げ。
@@ -89,7 +89,7 @@ interface action {
     if-received(resource-stack),   // 相対交換（OTC）
     if-taught-me(skill-id),        // 徒弟制の分割払いを月単位でアトミックにする
     unconditional-scheduled,
-    // 検討中: if-intimacy（担保型の約束）→ docs/design/06-communication.md、未決 #7
+    // 検討中: if-intimacy（担保型の約束）→ pages/content/docs/communication.md、未決 #7
   }
 
   record cond-give {
@@ -164,7 +164,7 @@ interface observation {
     invoke-result(invoke-result-info),
     action-failed(action-kind),     // 失敗理由は返さない
     // proposal-received は P0-1 で削除（無料シグナル化するため。
-    // 申し出は give プロトコルで自作する → docs/design/06-communication.md）
+    // 申し出は give プロトコルで自作する → pages/content/docs/communication.md）
   }
 
   record board-quote {

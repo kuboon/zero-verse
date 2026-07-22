@@ -134,7 +134,7 @@ impl exports::zeroverse::world::brain_api::Guest for Forager {
             }
         }
 
-        // 3. 片付けは経済行動（docs/design/human.md）:
+        // 3. 片付けは経済行動（pages/content/docs/human.md）:
         //    食料以外で最も多い resource を捨てて占有維持費を抑える。
         //    ただし何が食料かを知るまでは何も捨てない（誤って食料を捨てると死ぬ。
         //    無知の間の維持費は学習の授業料）

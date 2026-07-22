@@ -30,7 +30,7 @@ pub enum Event {
         /// health の増分（1/1000）
         health_gain: Qty,
     },
-    /// 板での約定（→ docs/design/04-market.md）
+    /// 板での約定（→ pages/content/docs/market.md）
     TradeExecuted {
         counterparty: HumanId,
         gave: (ResourceId, Qty),
@@ -40,7 +40,7 @@ pub enum Event {
     TeachProgressed { partner: HumanId, skill: SkillId },
     /// skill を獲得した（教育の完了、またはリバースエンジニアリング）
     SkillAcquired(SkillId),
-    /// 出産。**母にのみ届く**。父には 0 歳の知人が現れるだけ（docs/design/05-kinship.md）
+    /// 出産。**母にのみ届く**。父には 0 歳の知人が現れるだけ（pages/content/docs/kinship.md）
     ChildBorn(HumanId),
     /// 失敗理由は返さない
     ActionFailed,
@@ -50,15 +50,15 @@ pub enum Event {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AcquaintanceView {
     pub id: HumanId,
-    /// 親密度（両者から同じ値が見える → docs/design/human.md）
+    /// 親密度（両者から同じ値が見える → pages/content/docs/human.md）
     pub intimacy: Qty,
     /// 見かけの年齢（年）。実年齢 + stats から算出され、実年齢そのものは見えない
-    ///（→ docs/design/human.md。健康を損ねた人は老けて見える）
+    ///（→ pages/content/docs/human.md。健康を損ねた人は老けて見える）
     pub apparent_age: u32,
     pub alive: bool,
 }
 
-/// 板の公開気配（記名 → docs/design/04-market.md）
+/// 板の公開気配（記名 → pages/content/docs/market.md）
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardQuote {
     pub seller: HumanId,
@@ -106,7 +106,7 @@ pub struct Snapshot {
     pub resources: Vec<(ResourceId, Qty)>,
     /// 公開 skill-id と熟練度
     pub skills: Vec<(SkillId, Qty)>,
-    /// 知人（親密度・見かけの年齢・生死 → docs/design/human.md）
+    /// 知人（親密度・見かけの年齢・生死 → pages/content/docs/human.md）
     pub acquaintances: Vec<AcquaintanceView>,
     pub events: Vec<Event>,
     /// 先月の板の公開気配（記名）
@@ -131,7 +131,7 @@ pub enum Act {
         resource: ResourceId,
         amount: Qty,
     },
-    /// 同月に相手の Learn と対をなして 1 ヶ月分進捗（→ docs/design/03-skills.md）
+    /// 同月に相手の Learn と対をなして 1 ヶ月分進捗（→ pages/content/docs/skills.md）
     Teach {
         student: HumanId,
         skill: SkillId,
@@ -157,12 +157,12 @@ pub enum GiveCondition {
 #[derive(Clone, Debug, Default)]
 pub struct Decision {
     pub acts: Vec<Act>,
-    /// standing orders（毎月全交換 → docs/design/04-market.md）
+    /// standing orders（毎月全交換 → pages/content/docs/market.md）
     pub orders: Vec<StandingOrder>,
     /// None = save-memory を呼ばなかった（先月のまま）
     pub memory: Option<Vec<u8>>,
     /// この decide が消費した WASM fuel。health の減少に写像される
-    /// （docs/design/human.md 思考コスト。ネイティブ brain は 0）
+    /// （pages/content/docs/human.md 思考コスト。ネイティブ brain は 0）
     pub fuel_used: u64,
 }
 

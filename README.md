@@ -12,29 +12,39 @@
 
 貨幣、家族、契約、評判、制度はすべて brain の戦略として創発させる。制度も「要素」であり、world 側に実装してはならない（例外は実験用パラメータとしての切り替えのみ）。
 
-## ドキュメント
+## サイトとドキュメント
 
-`docs/` は GitHub Pages として公開する（入口は [docs/index.md](./docs/index.md)）。
+サイトは [`pages/`](./pages) の Remix v3 SSG（[remix3-ssg-gh-pages](https://github.com/kuboon/remix3-ssg-gh-pages) 構成）でビルドし、GitHub Pages に公開する。
+
+- **[landing](https://kuboon.github.io/zero-verse/)** — 入口
+- **[play](https://kuboon.github.io/zero-verse/play/)** — ブラウザ内で engine と wasm component の brain を実行する観戦 UI（ソースは [`pages/static/play/`](./pages/static/play)）
+- **[docs](https://kuboon.github.io/zero-verse/docs/)** — 設計ドキュメント（ソースは [`pages/content/docs/`](./pages/content/docs)）
 
 | パス | 内容 |
 | --- | --- |
-| [docs/PLAN.md](./docs/PLAN.md) | 実装計画（フェーズ分割・マイルストーン・合格基準） |
-| [docs/design/](./docs/design/) | 設計ドキュメント（公理系、human / resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ）。WIT の型定義は各トピックの md に分散 |
-| [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) | brain ⇔ engine 接続仕様（WIT）の全体像と分散マップ |
+| [pages/content/docs/plan.md](./pages/content/docs/plan.md) | 実装計画（フェーズ分割・マイルストーン・合格基準） |
+| [pages/content/docs/](./pages/content/docs/) | 設計ドキュメント（公理系、human / resource / skill / 市場 / 血縁 / 採点 / アーキテクチャ）。WIT の型定義は各トピックの md に分散 |
+| [pages/content/docs/wit.md](./pages/content/docs/wit.md) | brain ⇔ engine 接続仕様（WIT）の全体像と分散マップ |
 
-設計ドキュメントは `docs/` を source of truth とし、設計変更はここに反映する。
+設計ドキュメントは `pages/content/docs/` を source of truth とし、設計変更はここに反映する。
+
+```sh
+cd pages
+deno task dev     # ローカル開発サーバ
+deno task build   # 静的サイトを pages/dist に生成
+```
 
 ## ステータス
 
-**P0（基盤 + wasmtime 統合）と M1（交易は自給自足に勝つか）を達成。** 決定論エンジン・環境循環・空間・skill（harvest / 食事）・参照 brain を実装済み。`cargo run -p zeroverse-cli -- m1` で交易 vs 自給自足の生涯消費比（全シードで > 1.0）を再現できる。brain と scenario（init + クリア判定）は **WASM component** として動く：`scripts/build-guests.sh` でビルドし、`zeroverse-wasm run --scenario ... --brain 0=...` で「法則を知らずに生まれた brain が実験から食事を発見して生き延びる」デモが走る。次は M2（貨幣の創発）。詳細は [docs/PLAN.md](./docs/PLAN.md)。
+**P0（基盤 + wasmtime 統合）と M1〜M4（交易・貨幣・教育・血縁投資の創発）を達成。** 決定論エンジン・環境循環・空間・skill・市場・血縁・参照 brain を実装済み。`cargo run -p zeroverse-cli -- m1` で交易 vs 自給自足の生涯消費比（全シードで > 1.0）を再現できる。brain と scenario（init + クリア判定）は **WASM component** として動く：`scripts/build-guests.sh` でビルドし、`zeroverse-wasm run --scenario ... --brain 0=...` で「法則を知らずに生まれた brain が実験から食事を発見して生き延びる」デモが走る。ブラウザでは [play ページ](https://kuboon.github.io/zero-verse/play/)で同じランを観戦できる。詳細は [pages/content/docs/plan.md](./pages/content/docs/plan.md)。
 
 ### 実装セッションの読み順
 
-1. [docs/design/00-overview.md](./docs/design/00-overview.md) — 設計原則と全体像
-2. [docs/design/01-axioms.md](./docs/design/01-axioms.md) — 公理系（11 項）。これが仕様の憲法
-3. [docs/design/human.md](./docs/design/human.md) / [world.md](./docs/design/world.md) — 二大エンティティ
-4. [docs/design/02-resources.md](./docs/design/02-resources.md) / [03-skills.md](./docs/design/03-skills.md) — M1 の中核メカニクス
-5. [docs/design/09-wit-draft.md](./docs/design/09-wit-draft.md) — WIT の骨格・分散マップ・不変の原則
-6. [docs/PLAN.md](./docs/PLAN.md) — P0 の作業項目と M1 の合格基準
+1. [overview.md](./pages/content/docs/overview.md) — 設計原則と全体像
+2. [axioms.md](./pages/content/docs/axioms.md) — 公理系（11 項）。これが仕様の憲法
+3. [human.md](./pages/content/docs/human.md) / [world.md](./pages/content/docs/world.md) — 二大エンティティ
+4. [resources.md](./pages/content/docs/resources.md) / [skills.md](./pages/content/docs/skills.md) — M1 の中核メカニクス
+5. [wit.md](./pages/content/docs/wit.md) — WIT の骨格・分散マップ・不変の原則
+6. [plan.md](./pages/content/docs/plan.md) — フェーズ一覧とマイルストーンの合格基準
 
-各設計 md 末尾の「詰めるべき点」チェックリストと [90-open-questions.md](./docs/design/90-open-questions.md) が未決の全リスト。**M1 期限の未決（#2, #11〜#15）は P0-1 の WIT 確定時に仮決めしてよい**（決定は 90 と該当 md に反映すること）。
+各設計 md 末尾の「詰めるべき点」チェックリストと [open-questions.md](./pages/content/docs/open-questions.md) が未決の全リスト。
