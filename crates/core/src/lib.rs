@@ -87,6 +87,9 @@ pub struct WorldParams {
     /// 見かけの年齢の補正係数 β（‰）。vitality = (health+strength)/2 ÷ STAT_MAX として
     /// apparent-age = age × (1 + β(1 − vitality))（→ pages/content/docs/human.md）
     pub apparent_age_beta_permille: u64,
+    /// 見かけの性別のノイズ幅 σ: apparent-sex = 真値 ± σ（一様、観測者ペア固定）。
+    /// 時代プリセットの軸候補（服装規範が強い時代ほど小さい）
+    pub apparent_sex_noise: u8,
 }
 
 impl Default for WorldParams {
@@ -122,6 +125,7 @@ impl Default for WorldParams {
             gestation_months: 9,
             birth_health_cost: 10 * QTY_SCALE,
             apparent_age_beta_permille: 300, // stats 全損なら 3 割老けて見える
+            apparent_sex_noise: 3,
         }
     }
 }

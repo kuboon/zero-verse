@@ -12,9 +12,25 @@
 use crate::brain::{Act, Brain, Decision, Event, Snapshot};
 use crate::laws::{LawGraph, SkillKind, N_PRIMARY, N_RESOURCES};
 use crate::rng::{div_round_stochastic, hash3, hash4};
-use crate::state::{clamp_stat, Human, Sex, Stats, World};
+use crate::state::{clamp_stat, Human, Stats, World, SEX_MAX};
 use crate::{HumanId, Qty, WorldParams, QTY_SCALE, STAT_MAX};
 use std::collections::BTreeMap;
+
+/// 出生時の sex 値（-10〜+10）。符号は 1/2（公理を維持）、大きさは二峰型:
+/// 90% は 4〜10 のはっきりした性徴、10% は 0〜3 の曖昧域（0 = 中性）。
+/// 曖昧さを常態でなく「尾」にすることで、apparent-sex の面白さが例外側に宿る。
+fn draw_sex(h: u64) -> i8 {
+    let mag = if (h >> 1) % 100 < 10 {
+        ((h >> 8) % 4) as i8 // 0..=3（曖昧域）
+    } else {
+        (4 + (h >> 8) % 7) as i8 // 4..=10
+    };
+    if h & 1 == 0 {
+        -mag
+    } else {
+        mag
+    }
+}
 
 impl World {
     pub fn new(seed: u64, n_humans: usize, params: WorldParams) -> World {
@@ -36,7 +52,7 @@ impl World {
                 salt += 1;
             };
             let h = hash3(seed, 0xB11, i as u64);
-            let sex = if h & 1 == 0 { Sex::Female } else { Sex::Male };
+            let sex = draw_sex(h);
             let age_months = 18 * 12 + (hash3(h, 0xA6E, 0) % (22 * 12)) as u32; // 18〜40歳
             let mut inventory = BTreeMap::new();
             for idx in 0..N_PRIMARY {
@@ -234,6 +250,11 @@ impl World {
                             .get(&a)
                             .map(|o| self.apparent_age_years(o))
                             .unwrap_or(0),
+                        apparent_sex: self
+                            .humans
+                            .get(&a)
+                            .map(|o| self.apparent_sex(hid, o))
+                            .unwrap_or(0),
                         alive: self.humans.contains_key(&a),
                     })
                     .collect(),
@@ -389,6 +410,18 @@ impl World {
         (a.min(b), a.max(b))
     }
 
+    /// 見かけの性別（-10〜+10）。真値に観測者×相手ペア固定の一様ノイズ ±σ を
+    /// 加えたもの。月ごとに揺らすと多数決で真値が復元できてしまうため、
+    /// ノイズはペアで固定する（「私にはあの人がずっとこう見える」）。
+    /// 確定情報は行動（conceive の有無・妊娠）からしか得られない
+    ///（→ pages/content/docs/human.md）。
+    pub fn apparent_sex(&self, observer: HumanId, target: &crate::state::Human) -> i8 {
+        let sigma = self.params.apparent_sex_noise as i64;
+        let h = hash3(self.seed ^ 0xA55E, observer, target.id);
+        let noise = (h % (2 * sigma + 1) as u64) as i64 - sigma;
+        (target.sex as i64 + noise).clamp(-(SEX_MAX as i64), SEX_MAX as i64) as i8
+    }
+
     /// 見かけの年齢（年）。実年齢そのものは他人に見えず、この値だけが観測される。
     /// apparent-age = age × (1 + β(1 − vitality))。vitality は health・strength の
     /// 合成なので、若く見せるには実コストがかかる正直なシグナルになる
@@ -472,8 +505,9 @@ impl World {
         (self.intimacy_of(from, to) as u128 * 1000 / total) as u64
     }
 
-    /// conceive の自動発生: 相対親密度が相互に閾値超 ＋ 異性 ＋ 双方 fertility 窓内
-    /// ＋ 非刷り込み ＋ 女性が非妊娠。条件を満たす相手が複数なら相互相対親密度の
+    /// conceive の自動発生: 相対親密度が相互に閾値超 ＋ sex の符号が逆（負側が母）
+    /// ＋ 双方 fertility 窓内 ＋ 非刷り込み ＋ 母側が非妊娠。sex = 0（中性）は
+    /// どの相手とも成立しない。条件を満たす相手が複数なら相互相対親密度の
     /// 最小値が最大のペア（tie は id）で決定論的に選ぶ。
     fn resolve_conception(&mut self, month: u32) {
         let threshold = self.params.conceive_rel_permille;
@@ -482,7 +516,7 @@ impl World {
             let Some(fh) = self.humans.get(&f) else {
                 continue;
             };
-            if fh.sex != Sex::Female || fh.pregnant.is_some() || fh.stats.fertility == 0 {
+            if !fh.is_female() || fh.pregnant.is_some() || fh.stats.fertility == 0 {
                 continue;
             }
             let candidates: Vec<HumanId> = fh.acquaintances.iter().copied().collect();
@@ -491,7 +525,7 @@ impl World {
                 let Some(mh) = self.humans.get(&m) else {
                     continue;
                 };
-                if mh.sex != Sex::Male || mh.stats.fertility == 0 {
+                if !mh.is_male() || mh.stats.fertility == 0 {
                     continue;
                 }
                 if self.imprinted.contains(&Self::pair_key(f, m)) {
@@ -534,11 +568,7 @@ impl World {
                 }
                 salt += 1;
             };
-            let sex = if hash4(self.seed, 0x5EC5, month as u64, child) & 1 == 0 {
-                Sex::Female
-            } else {
-                Sex::Male
-            };
+            let sex = draw_sex(hash4(self.seed, 0x5EC5, month as u64, child));
             // 生得付与: 母の食事 skill（#12 仮決定: 食文化は母から）
             let inherited_eats: Vec<(usize, Qty)> = self
                 .humans
@@ -591,6 +621,20 @@ impl World {
                 .intimacy
                 .entry(Self::pair_key(mother, child))
                 .or_insert(0) += init;
+            // 同じ母に育てられたきょうだいは共在する: 出生時に知人になり共在親密度を
+            // 持つ → 刷り込み（Westermarck）が働き、近親婚は行動を待たず忌避される
+            let siblings: Vec<HumanId> = self
+                .parentage
+                .iter()
+                .filter(|&(&c, &(m2, _))| c != child && m2 == mother)
+                .map(|(&c, _)| c)
+                .filter(|c| self.humans.contains_key(c))
+                .collect();
+            for s in siblings {
+                self.add_acquaintance(child, s);
+                let e = self.intimacy.entry(Self::pair_key(child, s)).or_insert(0);
+                *e = (*e).max(init / 2);
+            }
             self.push_event(mother, Event::ChildBorn(child));
         }
     }
@@ -626,12 +670,14 @@ impl World {
                 .get(&teacher)
                 .and_then(|h| h.skills.get(&k).copied())
                 .unwrap_or(0);
-            let student_has = self
+            // 既習者への再教育は教師の熟練を上限に上積みできる（研鑽）。
+            // 教師の水準に達している相手にはもう教えられることがない
+            let student_prof = self
                 .humans
                 .get(&student)
-                .map(|h| h.skills.contains_key(&k))
-                .unwrap_or(true);
-            if teacher_prof == 0 || student_has {
+                .map(|h| h.skills.get(&k).copied())
+                .unwrap_or(Some(0));
+            if teacher_prof == 0 || student_prof.map(|p| p >= teacher_prof).unwrap_or(false) {
                 self.push_event(teacher, Event::ActionFailed);
                 self.push_event(student, Event::ActionFailed);
                 continue;
@@ -645,16 +691,19 @@ impl World {
             let add = ((teacher_prof / QTY_SCALE) * (cognition / QTY_SCALE) / 100).max(1);
             let needed = self.params.teach_progress_needed;
             let initial = self.params.learn_initial_prof;
+            // done = Some(初取得か)。研鑽の完了は SkillAcquired を出さない
             let done = {
                 let s = self.humans.get_mut(&student).unwrap();
                 let p = s.learning.entry(k).or_insert(0);
                 *p += add;
                 if *p >= needed {
                     s.learning.remove(&k);
-                    s.skills.insert(k, initial);
-                    true
+                    let newly = !s.skills.contains_key(&k);
+                    let prof = (s.skills.get(&k).copied().unwrap_or(0) + initial).min(teacher_prof);
+                    s.skills.insert(k, prof);
+                    Some(newly)
                 } else {
-                    false
+                    None
                 }
             };
             self.push_event(
@@ -671,7 +720,7 @@ impl World {
                     skill: skill_pub,
                 },
             );
-            if done {
+            if done == Some(true) {
                 self.push_event(student, Event::SkillAcquired(skill_pub));
             }
             // 教育も相互作用: 互いを知人にし、親密度を上げる
@@ -871,6 +920,33 @@ impl World {
                 using_skills,
             } => {
                 self.apply_invoke(hid, inputs, using_skills, month);
+            }
+            Act::Introduce { to, subject } => {
+                // 自分の知人同士を引き合わせる。双方に introduced が届き、知人になる。
+                // 親密度は増やさない（紹介は出会いの提供であって相互作用の当事者ではない）
+                let ok = to != subject
+                    && self.humans.contains_key(&to)
+                    && self.humans.contains_key(&subject)
+                    && self
+                        .humans
+                        .get(&hid)
+                        .map(|h| {
+                            h.acquaintances.contains(&to) && h.acquaintances.contains(&subject)
+                        })
+                        .unwrap_or(false);
+                if !ok {
+                    self.push_event(hid, Event::ActionFailed);
+                    return;
+                }
+                self.add_acquaintance(to, subject);
+                self.push_event(to, Event::Introduced { via: hid, subject });
+                self.push_event(
+                    subject,
+                    Event::Introduced {
+                        via: hid,
+                        subject: to,
+                    },
+                );
             }
             // teach/learn は resolve_teaching で対にして解決される（ここには来ない）
             Act::Teach { .. } | Act::Learn { .. } => {}

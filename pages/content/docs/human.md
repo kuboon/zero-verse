@@ -13,7 +13,7 @@ human は world に存在する唯一の要素である（[設計原則](./overv
 
 ## ライフサイクル
 
-1. **出生**：conceive は相対親密度の条件が揃うと自動発生する（[05-kinship.md](./kinship.md)）。誕生時に sex が 1/2 で決まる（下記）。
+1. **出生**：conceive は相対親密度の条件が揃うと自動発生する（[05-kinship.md](./kinship.md)）。誕生時に sex（-10〜+10 のグラデーション。符号は 1/2）が決まる（下記）。
 2. **0〜6歳**：world 提供の共通 baby brain で動く。
 3. **6歳**：父母どちらかの brain を 50% ずつの確率で引き継ぐ。切替は観測不能。
 4. **老化**：stats が低下し、memory 上限が減る（物忘れ）。
@@ -71,13 +71,23 @@ record stat {
 
 ## 性別（sex）
 
-- sex は誕生時に 1/2 の確率で決まる（female / male）。**本人以外には不可視**。self-view にだけ入り、acquaintance には出ない。
-- conceive は異性ペアでのみ自動発生する（[05-kinship.md](./kinship.md)）。発生しない理由は通知されないので、相手の sex は「条件が揃っているはずなのに conceive が起きない」ことからの推定を含め、確率的にしか判らない（同性・fertility 窓外・刷り込み・親密度の分散と区別がつかない）。
-- 妊娠・出産のコスト（health の一時低下）は女性が負う。
-- **出産の観測は非対称**：女性は `child-born` イベントで自分の子を確実に知る。男性には何も通知されず、**0歳の知人が 1 人増えるだけ**。父性の確実な証明は world のどこにも存在しない（[05-kinship.md](./kinship.md)）。
+- sex は **-10〜+10 の整数のグラデーション**（負 = 女性、正 = 男性、0 = 中性）。誕生時に決定論的に決まり、**符号は 1/2**。大きさは二峰型（約 90% は |sex| 4〜10 のはっきりした性徴、約 10% が 0〜3 の曖昧域）。
+- **真値は本人にのみ見える**（self-view）。他人には **apparent-sex**（下記）しか見えない。
+- conceive は **符号が逆のペア**でのみ自動発生し、負側が母になる（[05-kinship.md](./kinship.md)）。0（中性）はどの相手とも成立しない。**|sex| は繁殖力に影響しない** — 効くのは見かけの判りやすさだけ。
+- 妊娠・出産のコスト（health の一時低下）は母側が負う。
+- **出産の観測は非対称**：母は `child-born` イベントで自分の子を確実に知る。父には何も通知されず、**0歳の知人が 1 人増えるだけ**。父性の確実な証明は world のどこにも存在しない（[05-kinship.md](./kinship.md)）。
+
+### apparent-sex（見かけの性別）
+
+知人観測に出るのは `apparent-sex = clamp(真値 + ノイズ, ±10)`。
+
+- ノイズは **観測者×相手ペアごとに固定**の一様乱数 ±σ（world パラメータ `apparent-sex-noise`、既定 3）。**月ごとに揺らさない**のが要点で、揺らすと多数決で真値が復元できてしまう。「私にはあの人がずっとこう見える」という誤認は観測では覆らない。
+- 帰結: 真値 +10 は apparent 7〜10（ほぼ確実に男性）、真値 +2 は apparent -1〜+5（女性の可能性が残る）。**|apparent| が確信度**になる。
+- 確定情報は行動からしか得られない: 求愛して子ができれば異性と確定。できなくても「同符号 / fertility 窓外 / 刷り込み / 親密度の分散」と区別はつかない。参照実装の求愛 brain は「数年子ができなければ相手を替える」ことで誤認ペアを解消する。
+- σ は時代プリセットの軸候補（服装規範が強い時代ほど小さい → [world.md](./world.md)）。
 
 ```wit
-enum sex { female, male }   // self-view にのみ含まれる
+type sex = s8;   // -10〜+10。真値は self-view にのみ、apparent-sex は acquaintance に
 ```
 
 ## 親密度（intimacy）
@@ -120,7 +130,7 @@ human は world の有限な空間を占有する（[公理 11](./axioms.md)、[
 ## 知人（acquaintance）
 
 - 獲得経路は introduce（triadic closure）と、確率 ε の偶発的出会い（[公理 6](./axioms.md)）。
-- 知人について観測できるのは `apparent-age`（実年齢と stats から算出される見かけの年齢。上記）、`alive`、`intimacy`（親密度。上記）、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
+- 知人について観測できるのは `apparent-age`（見かけの年齢。上記）、`apparent-sex`（見かけの性別。上記）、`alive`、`intimacy`（親密度。上記）、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
 - relation-hint（world による関係の保証）は**廃止した**。world が human 間の関係を証明する仕組みは存在しない（[05-kinship.md](./kinship.md)）。
 - 知人リストの上限は未決（[90-open-questions.md](./open-questions.md) #2）。
 
@@ -142,7 +152,7 @@ interface observation {
   record self-view {
     id: human-id,
     age-months: u32,
-    sex: sex,                       // 本人以外には不可視
+    sex: sex,                       // 真値（-10〜+10）。本人にのみ見える
     stats: list<stat>,              // stat 一覧は上記 4 種で固定
     resources: list<resource-stack>,
     space-used: qty,                // 占有空間（身体 + 保有体積）
@@ -156,6 +166,7 @@ interface observation {
   record acquaintance {
     id: human-id,
     apparent-age: u32,        // 見かけの年齢（年単位。実年齢と stats から算出）
+    apparent-sex: sex,        // 見かけの性別（真値 + 観測者ペア固定ノイズ）
     alive: bool,
     intimacy: qty,            // 親密度。両者から同じ値が見える
     last-interaction: option<month>,

@@ -788,6 +788,7 @@ pub struct FamilyBrain {
     children: Vec<HumanId>,
     known_acquaintances: Vec<HumanId>,
     teach_cursor: usize,
+    intro_cursor: usize,
 }
 
 impl FamilyBrain {
@@ -805,6 +806,7 @@ impl FamilyBrain {
             children: Vec::new(),
             known_acquaintances: Vec::new(),
             teach_cursor: 0,
+            intro_cursor: 0,
         }
     }
 }
@@ -822,39 +824,61 @@ impl Brain for FamilyBrain {
                 }
             }
         }
-        for a in snap.acquaintances.iter().map(|v| v.id) {
-            if !self.known_acquaintances.contains(&a) {
+        for v in &snap.acquaintances {
+            if !self.known_acquaintances.contains(&v.id) {
+                // 0 歳に見える新しい知人だけを我が子と推測する（apparent-age を使う。
+                // introduce や ε で現れた成人を誤認しない。父性不確実性はそのまま）
                 if !self.known_acquaintances.is_empty()
-                    && Some(a) != self.partner
-                    && !self.children.contains(&a)
+                    && Some(v.id) != self.partner
+                    && v.apparent_age == 0
+                    && v.intimacy < 10 * QTY_SCALE
+                    && !self.children.contains(&v.id)
                 {
-                    self.children.push(a);
+                    self.children.push(v.id);
                 }
-                self.known_acquaintances.push(a);
+                self.known_acquaintances.push(v.id);
             }
         }
         if self.known_acquaintances.is_empty() {
             self.known_acquaintances = snap.acquaintances.iter().map(|v| v.id).collect();
         }
 
-        let mut acts = vec![
-            Act::Invoke {
+        // 子離れ: 給餌・teach の対象は「見かけ 18 歳未満」の子だけ。
+        // 成人した子に給餌を続けると子の親密度ポートフォリオが親に占有され、
+        // 子の配偶者への相対親密度が 50% を超えられず孫ができない
+        //（「親の愛が避妊になる」の実測より）。紹介（見合い）は成人にも続ける
+        let minors: Vec<HumanId> = self
+            .children
+            .iter()
+            .copied()
+            .filter(|c| {
+                snap.acquaintances
+                    .iter()
+                    .any(|v| v.id == *c && v.alive && v.apparent_age < 18)
+            })
+            .collect();
+
+        // 採取は備蓄が薄いときだけ（λ の小さい食料を無限に溜めると
+        // 占有維持費で「穀倉死」する。備蓄上限は倉庫コストとの均衡点）
+        let mut acts = Vec::new();
+        if held(snap, self.edible) < 10 * QTY_SCALE {
+            acts.push(Act::Invoke {
                 inputs: vec![],
                 using_skills: vec![self.harvest_skill],
-            },
-            Act::Invoke {
-                inputs: vec![(self.edible, QTY_SCALE)],
-                using_skills: vec![self.eat_skill],
-            },
-        ];
+            });
+        }
+        acts.push(Act::Invoke {
+            inputs: vec![(self.edible, QTY_SCALE)],
+            using_skills: vec![self.eat_skill],
+        });
 
         // 贈与: 子がいれば子への給餌を優先（食文化は母系 → 自分の edible を渡す）。
         // いなければ配偶者への求愛贈与。偶数月は贈与、奇数月は片付け。
         if snap.now.is_multiple_of(2) {
-            let target = if self.children.is_empty() {
+            let target = if minors.is_empty() {
                 self.partner
             } else {
-                Some(self.children[(snap.now as usize / 2) % self.children.len()])
+                Some(minors[(snap.now as usize / 2) % minors.len()])
             };
             if let Some(to) = target {
                 if held(snap, self.edible) > QTY_SCALE {
@@ -865,13 +889,29 @@ impl Brain for FamilyBrain {
                     });
                 }
             }
+        } else if !self.children.is_empty() && snap.now % 6 == 3 {
+            // 見合い: 子を自分の知人に紹介して社会グラフへ接続する。
+            // 自分の子同士は紹介しない（近親の出会いを親は作らない）
+            let child = self.children[self.intro_cursor % self.children.len()];
+            let candidates: Vec<HumanId> = snap
+                .acquaintances
+                .iter()
+                .map(|v| v.id)
+                .filter(|&a| a != child && Some(a) != self.partner && !self.children.contains(&a))
+                .collect();
+            if !candidates.is_empty() {
+                let subject =
+                    candidates[(self.intro_cursor / self.children.len().max(1)) % candidates.len()];
+                self.intro_cursor += 1;
+                acts.push(Act::Introduce { to: child, subject });
+            }
         } else {
             acts.extend(discard_junk(snap, &[self.edible], 1));
         }
 
-        // 血縁投資: 知っている子に無償で teach（対価は求めない）
-        if !self.children.is_empty() {
-            let child = self.children[self.teach_cursor % self.children.len()];
+        // 血縁投資: 未成年の子に無償で teach（対価は求めない）
+        if !minors.is_empty() {
+            let child = minors[self.teach_cursor % minors.len()];
             self.teach_cursor += 1;
             acts.push(Act::Teach {
                 student: child,
@@ -924,32 +964,284 @@ pub struct KidBrain {
 
 impl Brain for KidBrain {
     fn decide(&mut self, snap: &Snapshot) -> Decision {
-        let has = |s: SkillId| snap.skills.iter().any(|&(k, _)| k == s);
+        let prof = |s: SkillId| {
+            snap.skills
+                .iter()
+                .find(|&&(k, _)| k == s)
+                .map(|&(_, p)| p)
+                .unwrap_or(0)
+        };
         let mut acts = Vec::new();
-        if has(self.mother_skill) {
+        if prof(self.mother_skill) > 0 && held(snap, self.edible) < 10 * QTY_SCALE {
             acts.push(Act::Invoke {
                 inputs: vec![],
                 using_skills: vec![self.mother_skill],
             });
-        } else {
+        }
+        // 親の水準（≈100%）に達するまで学び続ける（研鑽）。
+        // 初取得の 50% で止まると生産が薄く、成人後の求愛・給餌の原資が作れない
+        if prof(self.mother_skill) < STAT_MAX {
             acts.push(Act::Learn {
                 teacher: self.mother,
                 skill: self.mother_skill,
             });
         }
-        if !has(self.father_skill) {
+        if prof(self.father_skill) < STAT_MAX {
             acts.push(Act::Learn {
                 teacher: self.father,
                 skill: self.father_skill,
             });
         }
+        if snap.health < 90 * QTY_SCALE && held(snap, self.edible) > 0 && acts.len() < 4 {
+            acts.push(Act::Invoke {
+                inputs: vec![(self.edible, QTY_SCALE)],
+                using_skills: vec![self.eat_skill],
+            });
+        }
+        if acts.len() < 4 {
+            acts.extend(discard_junk(snap, &[self.edible], 1));
+        }
+        Decision {
+            acts,
+            orders: vec![],
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// 成人第二世代の求愛 brain: 自活しつつ配偶者を探し、親になれば血縁投資する。
+/// 相手の sex は真値が見えないため **apparent-sex**（符号 + 確信度）で選ぶ:
+/// - 候補 = 幼なじみでない（成人時点で親密度が低い）知人のうち、apparent-sex の
+///   符号が自分と逆で、まだ見限っていない相手
+/// - 求愛 = 月次のトークン贈与。応えられたらパートナー（相互贈与の均衡 = 婚姻）
+/// - 求愛されたら: 自分が独身で相手が適格なら贈与で応える
+/// - 見切り: 求愛に応答が無い相手は数ヶ月で、子が数年できないパートナーは数年で
+///   諦めて次へ（apparent-sex の誤認 = 同符号ペアはここで解消される。
+///   真値は最後まで観測できず、「conceive が起きない」ことからしか推定できない）
+pub struct CourtingBrain {
+    pub edible: ResourceId,
+    pub harvest_skill: SkillId,
+    pub eat_skill: SkillId,
+    /// 成人時点の高親密度知人（親・幼なじみ）。以後の親密度上昇で再分類しない
+    kin: Option<Vec<HumanId>>,
+    rejected: Vec<HumanId>,
+    partner: Option<HumanId>,
+    partner_since: u32,
+    children_at_pairing: usize,
+    months_since_received: u32,
+    court_target: Option<HumanId>,
+    months_courting: u32,
+    children: Vec<HumanId>,
+    teach_cursor: usize,
+}
+
+impl CourtingBrain {
+    pub fn new(edible: ResourceId, harvest_skill: SkillId, eat_skill: SkillId) -> Self {
+        CourtingBrain {
+            edible,
+            harvest_skill,
+            eat_skill,
+            kin: None,
+            rejected: Vec::new(),
+            partner: None,
+            partner_since: 0,
+            children_at_pairing: 0,
+            months_since_received: 0,
+            court_target: None,
+            months_courting: 0,
+            children: Vec::new(),
+            teach_cursor: 0,
+        }
+    }
+}
+
+impl Brain for CourtingBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::Event;
+
+        if self.kin.is_none() {
+            self.kin = Some(
+                snap.acquaintances
+                    .iter()
+                    .filter(|v| v.intimacy >= 2 * QTY_SCALE)
+                    .map(|v| v.id)
+                    .collect(),
+            );
+        }
+        let kin = self.kin.as_ref().unwrap().clone();
+
+        // 子の認識: 女性は child-born で確実に知る。男性はパートナー期間中に現れた
+        // 0 歳の知人を我が子と推測する（apparent-age を使う。父性不確実性はそのまま）
+        for ev in &snap.events {
+            if let Event::ChildBorn(c) = ev {
+                if !self.children.contains(c) {
+                    self.children.push(*c);
+                }
+            }
+        }
+        if self.partner.is_some() {
+            for v in &snap.acquaintances {
+                // 0 歳・低親密度の新顔だけを我が子と推測する。共在するきょうだい
+                //（新生児の弟妹）は出生時から親密度が高いのでここで弾かれる
+                if v.apparent_age == 0
+                    && v.intimacy < 10 * QTY_SCALE
+                    && Some(v.id) != self.partner
+                    && !self.children.contains(&v.id)
+                    && !kin.contains(&v.id)
+                {
+                    self.children.push(v.id);
+                }
+            }
+        }
+
+        let received_from = |id: HumanId| {
+            snap.events
+                .iter()
+                .any(|ev| matches!(ev, Event::ReceivedTransfer { from, .. } if *from == id))
+        };
+
+        // パートナー管理: 死別・応答途絶（TFT）・数年子ができない（誤認の解消）で解消
+        if let Some(p) = self.partner {
+            let alive = snap
+                .acquaintances
+                .iter()
+                .find(|v| v.id == p)
+                .map(|v| v.alive)
+                .unwrap_or(false);
+            if received_from(p) {
+                self.months_since_received = 0;
+            } else {
+                self.months_since_received = self.months_since_received.saturating_add(1);
+            }
+            let barren = snap.now.saturating_sub(self.partner_since) >= 5 * 12
+                && self.children.len() == self.children_at_pairing;
+            if !alive || self.months_since_received > 12 || barren {
+                self.rejected.push(p);
+                self.partner = None;
+            }
+        }
+
+        // 求愛 / 夫婦の贈与相手を決める
+        let my_sign = snap.sex.signum();
+        let mut gift_to: Option<HumanId> = None;
+        if let Some(p) = self.partner {
+            gift_to = Some(p);
+        } else if my_sign != 0 {
+            let rejected = self.rejected.clone();
+            let children = self.children.clone();
+            let eligible = |v: &crate::brain::AcquaintanceView| {
+                v.alive
+                    && v.apparent_sex.signum() == -my_sign
+                    && (15..=50).contains(&v.apparent_age)
+                    && !kin.contains(&v.id)
+                    && !rejected.contains(&v.id)
+                    && !children.contains(&v.id)
+            };
+            // 求愛への応答（自分から動くより優先）: 贈与をくれた適格な相手と結ばれる
+            let suitor = snap
+                .acquaintances
+                .iter()
+                .filter(|v| eligible(v))
+                .find(|v| received_from(v.id));
+            if let Some(s) = suitor {
+                self.partner = Some(s.id);
+                self.partner_since = snap.now;
+                self.children_at_pairing = self.children.len();
+                self.months_since_received = 0;
+                gift_to = Some(s.id);
+            } else {
+                // 自分からの求愛: 対象を固定し、応答が無ければ数ヶ月で次へ。
+                // 今月見限った相手は再選択の候補から除く（eligible の rejected は
+                // 月初のクローンなので、それだけでは同じ相手を選び直してしまう）
+                let target_ok = self
+                    .court_target
+                    .map(|t| snap.acquaintances.iter().any(|v| v.id == t && eligible(v)))
+                    .unwrap_or(false);
+                if !target_ok || self.months_courting >= 6 {
+                    let mut just_rejected = None;
+                    if let Some(t) = self.court_target {
+                        if self.months_courting >= 6 {
+                            if !self.rejected.contains(&t) {
+                                self.rejected.push(t);
+                            }
+                            just_rejected = Some(t);
+                        }
+                    }
+                    self.court_target = snap
+                        .acquaintances
+                        .iter()
+                        .filter(|v| eligible(v) && Some(v.id) != just_rejected)
+                        .map(|v| v.id)
+                        .next();
+                    self.months_courting = 0;
+                }
+                if let Some(t) = self.court_target {
+                    self.months_courting += 1;
+                    gift_to = Some(t);
+                }
+            }
+        }
+
+        // 採取は備蓄が薄いときだけ（FamilyBrain と同じ穀倉死の回避）
+        let mut acts = Vec::new();
+        if held(snap, self.edible) < 10 * QTY_SCALE {
+            acts.push(Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            });
+        }
+        // 食事は必要なときだけにして求愛・給餌の原資（余剰）を作る
         if snap.health < 90 * QTY_SCALE && held(snap, self.edible) > 0 {
             acts.push(Act::Invoke {
                 inputs: vec![(self.edible, QTY_SCALE)],
                 using_skills: vec![self.eat_skill],
             });
         }
-        acts.extend(discard_junk(snap, &[self.edible], 1));
+
+        // 贈与: 未成年の子がいれば偶数月は給餌を優先し、奇数月にパートナーへ。
+        // 親密度の増分は回数依存なのでトークン贈与（0.5）でよい。
+        // 成人した子には給餌しない（子離れ。FamilyBrain と同じ理由）
+        let minors: Vec<HumanId> = self
+            .children
+            .iter()
+            .copied()
+            .filter(|c| {
+                snap.acquaintances
+                    .iter()
+                    .any(|v| v.id == *c && v.alive && v.apparent_age < 18)
+            })
+            .collect();
+        let give_target = if !minors.is_empty() && snap.now.is_multiple_of(2) {
+            Some(minors[(snap.now as usize / 2) % minors.len()])
+        } else {
+            gift_to
+        };
+        if let Some(to) = give_target {
+            // 備蓄に余裕があるときだけ贈る（食い扶持を贈って餓死しない）
+            if held(snap, self.edible) > 2 * QTY_SCALE {
+                acts.push(Act::Give {
+                    to,
+                    resource: self.edible,
+                    amount: QTY_SCALE / 2,
+                });
+            }
+        }
+
+        // 4 枠目は片付けと血縁投資（teach）で分け合う。
+        // 片付けを怠ると配偶者からの贈り物（自分には食べられない食料）が
+        // 積み上がり、占有維持費で穀倉死する
+        if minors.is_empty() || snap.now.is_multiple_of(2) {
+            acts.extend(discard_junk(snap, &[self.edible], 1));
+        } else {
+            let child = minors[self.teach_cursor % minors.len()];
+            self.teach_cursor += 1;
+            acts.push(Act::Teach {
+                student: child,
+                skill: self.harvest_skill,
+            });
+        }
+
         Decision {
             acts,
             orders: vec![],
@@ -972,6 +1264,8 @@ pub struct M4Result {
     pub mother_invest: (Qty, u64),
     /// 父（と信じる側）から子への投資の総計
     pub father_invest: (Qty, u64),
+    /// 三世代目の出生数（親のどちらかが自身も world 内で生まれた子）
+    pub gen3_births: u64,
 }
 
 /// 家族系シナリオの共通ハーネス。毎月 step し、
@@ -1045,8 +1339,10 @@ fn family_transition_step(
                     }),
                 );
             } else if age == 18 * 12 {
+                // 成人: 求愛 brain（apparent-sex を手がかりに配偶者を探す）。
+                // 第二世代の婚姻が成立すれば三世代目が生まれる
                 let hs = world.laws.skill_id_of_index[e];
-                brains.insert(id, Box::new(FamilyBrain::new(rid, hs, es, None)));
+                brains.insert(id, Box::new(CourtingBrain::new(rid, hs, es)));
             }
         }
     }
@@ -1071,12 +1367,12 @@ pub fn build_m4(seed: u64, params: WorldParams) -> M4Setup {
     let females: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .filter(|id| world.humans[id].is_female())
         .collect();
     let males: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .filter(|id| world.humans[id].is_male())
         .collect();
 
     let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
@@ -1102,12 +1398,13 @@ pub fn build_m4(seed: u64, params: WorldParams) -> M4Setup {
             roles.insert(hid, "夫婦");
         }
     }
-    // あぶれた性別の人は独身の自活 brain
-    for &hid in females
+    // ペアにならなかった人（性比のあぶれ + 中性 sex = 0）は独身の自活 brain
+    let singles: Vec<HumanId> = ids
         .iter()
-        .skip(males.len())
-        .chain(males.iter().skip(females.len()))
-    {
+        .copied()
+        .filter(|id| !brains.contains_key(id))
+        .collect();
+    for hid in singles {
         let e = edible_of[&hid];
         let rid = world.laws.id_of_index[e];
         let hs = world.laws.skill_id_of_index[e];
@@ -1179,6 +1476,13 @@ fn m4_result(world: &World) -> M4Result {
         tgt.1 += teach_months;
     }
 
+    // 三世代目: 親のどちらかが自身も出生した子（第二世代の求愛が結実した証拠）
+    let gen3_births = world
+        .parentage
+        .values()
+        .filter(|&&(m, f)| world.parentage.contains_key(&m) || world.parentage.contains_key(&f))
+        .count() as u64;
+
     M4Result {
         births: world.births,
         population: world.humans.len(),
@@ -1188,6 +1492,7 @@ fn m4_result(world: &World) -> M4Result {
         imprinted_pairs: world.imprinted.len(),
         mother_invest,
         father_invest,
+        gen3_births,
     }
 }
 
@@ -1241,12 +1546,12 @@ pub fn build_m4_clans(seed: u64, exogamy: bool, params: WorldParams) -> M4ClansS
     let females: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .filter(|id| world.humans[id].is_female())
         .collect();
     let males: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .filter(|id| world.humans[id].is_male())
         .collect();
 
     // ペア数を偶数に揃え、女性 i・男性 i に氏族 i % 2 を割り当てる。
@@ -1259,18 +1564,28 @@ pub fn build_m4_clans(seed: u64, exogamy: bool, params: WorldParams) -> M4ClansS
     let mut edible_of: BTreeMap<HumanId, usize> = BTreeMap::new();
 
     // 氏族の技能を賦与（自氏族の harvest / eat のみ）
-    let mut setup = |world: &mut World, hid: HumanId, clan: usize| {
+    fn setup(
+        world: &mut World,
+        edible_of: &mut BTreeMap<HumanId, usize>,
+        hid: HumanId,
+        clan: usize,
+    ) {
         edible_of.insert(hid, clan);
         world.grant_skill(hid, clan, STAT_MAX); // H_clan
         world.grant_skill(hid, N_PRIMARY + clan, STAT_MAX); // E_clan
-    };
-    for i in 0..pairs {
-        setup(&mut world, females[i], clan_of(i));
-        setup(&mut world, males[i], clan_of(i));
     }
-    // ペア外の成人は独身の自活 brain（氏族 0 とする）
-    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
-        setup(&mut world, hid, 0);
+    for i in 0..pairs {
+        setup(&mut world, &mut edible_of, females[i], clan_of(i));
+        setup(&mut world, &mut edible_of, males[i], clan_of(i));
+    }
+    // ペア外の成人（性比のあぶれ + 中性 sex = 0）は氏族 0 とする
+    let unassigned: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| !edible_of.contains_key(id))
+        .collect();
+    for hid in unassigned {
+        setup(&mut world, &mut edible_of, hid, 0);
     }
 
     let mut roles: BTreeMap<HumanId, &'static str> = BTreeMap::new();
@@ -1298,7 +1613,12 @@ pub fn build_m4_clans(seed: u64, exogamy: bool, params: WorldParams) -> M4ClansS
             );
         }
     }
-    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
+    let singles: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| !brains.contains_key(id))
+        .collect();
+    for hid in singles {
         let e = edible_of[&hid];
         let rid = world.laws.id_of_index[e];
         let hs = world.laws.skill_id_of_index[e];
@@ -1509,12 +1829,12 @@ pub fn build_m4_marriage(seed: u64, params: WorldParams) -> M4MarriageSetup {
     let females: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Female)
+        .filter(|id| world.humans[id].is_female())
         .collect();
     let males: Vec<HumanId> = ids
         .iter()
         .copied()
-        .filter(|id| world.humans[id].sex == crate::state::Sex::Male)
+        .filter(|id| world.humans[id].is_male())
         .collect();
     let pairs = females.len().min(males.len());
 
@@ -1582,8 +1902,13 @@ pub fn build_m4_marriage(seed: u64, params: WorldParams) -> M4MarriageSetup {
             }
         }
     }
-    // あぶれた成人は独身の自活 brain
-    for &hid in females.iter().skip(pairs).chain(males.iter().skip(pairs)) {
+    // ペアにならなかった成人（性比のあぶれ + 中性 sex = 0）は独身の自活 brain
+    let singles: Vec<HumanId> = ids
+        .iter()
+        .copied()
+        .filter(|id| !brains.contains_key(id))
+        .collect();
+    for hid in singles {
         let e = edible_of[&hid];
         let rid = world.laws.id_of_index[e];
         let hs = world.laws.skill_id_of_index[e];
@@ -2118,6 +2443,26 @@ mod tests {
                 "seed {seed}: secret teacher leaked anyway"
             );
         }
+    }
+
+    /// 第二世代の求愛: apparent-sex を手がかりに世代を跨いで婚姻が形成され、
+    /// 三世代目が生まれる。sex の真値は誰にも見えないまま（誤認ペアは
+    /// 「数年子ができない」ことからの見切りで解消される）。
+    /// シード運（性比・誤認・早世）があるため過半数のシードでの成立を基準にする
+    #[test]
+    fn third_generation_emerges() {
+        let mut seeds_with_gen3 = 0;
+        for seed in 1..=3 {
+            let r = run_m4(seed, 55, WorldParams::default());
+            assert_eq!(r.incest_births, 0, "seed {seed}: incest births");
+            if r.gen3_births > 0 {
+                seeds_with_gen3 += 1;
+            }
+        }
+        assert!(
+            seeds_with_gen3 >= 2,
+            "gen3 births in only {seeds_with_gen3}/3 seeds"
+        );
     }
 
     /// ExperimentSession は CLI の run_* と同一の歴史を辿る（ビューワ再現の根拠）

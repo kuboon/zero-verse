@@ -6,11 +6,14 @@ use crate::rng::Fnv1a;
 use crate::{HumanId, Qty, WorldParams, QTY_SCALE, STAT_MAX};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Sex {
-    Female,
-    Male,
-}
+/// sex の真値: -10〜+10 の整数（負 = 女性、正 = 男性、0 = 中性）。
+/// 符号は出生時 1/2。conceive は符号が逆のペアでのみ成立し（負側が母）、
+/// |sex| は繁殖力に影響せず**見かけの判りやすさ**にだけ効く
+///（apparent-sex = 真値 + 観測者ペア固定ノイズ → pages/content/docs/human.md）。
+pub type SexValue = i8;
+
+/// sex 値の範囲（±SEX_MAX）
+pub const SEX_MAX: i8 = 10;
 
 #[derive(Clone, Debug)]
 pub struct Stats {
@@ -23,7 +26,7 @@ pub struct Stats {
 #[derive(Clone, Debug)]
 pub struct Human {
     pub id: HumanId,
-    pub sex: Sex,
+    pub sex: SexValue,
     pub age_months: u32,
     pub stats: Stats,
     /// 妊娠中なら (出産予定月, 父)。女性のみ
@@ -43,6 +46,14 @@ pub struct Human {
 }
 
 impl Human {
+    pub fn is_female(&self) -> bool {
+        self.sex < 0
+    }
+
+    pub fn is_male(&self) -> bool {
+        self.sex > 0
+    }
+
     pub fn storage_volume(&self, laws: &LawGraph) -> Qty {
         self.inventory
             .iter()
@@ -176,10 +187,7 @@ impl World {
         f.write_u64(self.humans.len() as u64);
         for h in self.humans.values() {
             f.write_u64(h.id);
-            f.write_u8(match h.sex {
-                Sex::Female => 0,
-                Sex::Male => 1,
-            });
+            f.write_u8(h.sex as u8);
             f.write_u32(h.age_months);
             match h.pregnant {
                 None => f.write_u8(0),
@@ -289,6 +297,11 @@ fn hash_event(f: &mut Fnv1a, ev: &Event) {
         Event::ChildBorn(c) => {
             f.write_u8(9);
             f.write_u64(*c);
+        }
+        Event::Introduced { via, subject } => {
+            f.write_u8(10);
+            f.write_u64(*via);
+            f.write_u64(*subject);
         }
         Event::ActionFailed => f.write_u8(5),
     }

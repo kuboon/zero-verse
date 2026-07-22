@@ -44,6 +44,7 @@ export interface SelfView {
 export interface Acquaintance {
   id: HumanId,
   apparentAge: number,
+  apparentSex: Sex,
   alive: boolean,
   intimacy: Qty,
   lastInteraction?: Month,

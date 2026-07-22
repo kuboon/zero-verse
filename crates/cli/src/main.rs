@@ -133,7 +133,7 @@ fn cmd_m4(args: &[String]) {
 
     println!("M4: 血縁は投資行動に現れるか（夫婦 6 組・{years} 年）");
     println!(
-        "{:>6} {:>6} {:>6} {:>6} {:>10} {:>12} {:>8} {:>16} {:>16}",
+        "{:>6} {:>6} {:>6} {:>6} {:>10} {:>12} {:>8} {:>16} {:>16} {:>6}",
         "seed",
         "出生",
         "人口",
@@ -142,13 +142,14 @@ fn cmd_m4(args: &[String]) {
         "子の技能伝達",
         "刷り込み",
         "母投資(給/教月)",
-        "父投資(給/教月)"
+        "父投資(給/教月)",
+        "三世代"
     );
     for seed in 1..=seeds {
         let r = run_m4(seed, years, WorldParams::default());
         let (taught, total) = r.kids_taught;
         println!(
-            "{:>6} {:>6} {:>6} {:>6} {:>10} {:>9}/{:<2} {:>8} {:>10.1}/{:<5} {:>10.1}/{:<5}",
+            "{:>6} {:>6} {:>6} {:>6} {:>10} {:>9}/{:<2} {:>8} {:>10.1}/{:<5} {:>10.1}/{:<5} {:>6}",
             seed,
             r.births,
             r.population,
@@ -161,6 +162,7 @@ fn cmd_m4(args: &[String]) {
             r.mother_invest.1,
             r.father_invest.0 as f64 / 1000.0,
             r.father_invest.1,
+            r.gen3_births,
         );
     }
 }

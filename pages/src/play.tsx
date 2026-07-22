@@ -88,7 +88,8 @@ function Play() {
           <section class="world">
             <canvas id="world" width="640" height="640"></canvas>
             <div class="legend">
-              ○ = 女性　□ = 男性　色 = health　大きさ = 年齢　桃輪 = 妊娠<br />
+              ○ = 女性（sex&lt;0）　□ = 男性（sex&gt;0）　◇ = 中性　色 =
+              health　大きさ = 年齢　桃輪 = 妊娠<br />
               桃線 = 親密度　灰破線 = 母子（全知ビュー。brain には見えない）
             </div>
             <div class="legend" id="roleLegend"></div>

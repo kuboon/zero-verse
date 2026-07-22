@@ -27,7 +27,10 @@ interface types {
     amount: qty,
   }
 
-  enum sex { female, male }   // self-view にのみ含まれる
+  // sex は -10〜+10 のグラデーション（負 = 女性、正 = 男性、0 = 中性）。
+  // 真値は self-view にのみ含まれる。conceive は符号が逆のペアでのみ成立（負側が母）。
+  // |値| は繁殖力に影響せず、見かけの判りやすさ（apparent-sex の確信度）にだけ効く
+  type sex = s8;
 
   enum stat-kind {
     health,     // 生存。0 で死
@@ -119,7 +122,7 @@ interface observation {
   record self-view {
     id: human-id,
     age-months: u32,
-    sex: sex,                       // 本人以外には不可視
+    sex: sex,                       // 真値（-10〜+10）。本人にのみ見える
     stats: list<stat>,
     resources: list<resource-stack>,
     space-used: qty,                // 占有空間（身体 + 保有体積）
@@ -133,6 +136,9 @@ interface observation {
   record acquaintance {
     id: human-id,
     apparent-age: u32,        // 見かけの年齢（年単位。実年齢と stats から算出）
+    // 見かけの性別（真値 + 観測者ペア固定のノイズ ±σ）。真値は見えない。
+    // |値| が大きいほど確信できる。ノイズがペア固定なので多数決では破れない
+    apparent-sex: sex,
     alive: bool,
     intimacy: qty,            // 親密度。両者から同じ値が見える
     last-interaction: option<month>,

@@ -16,7 +16,7 @@ summary: 実コスト通信の原則
 通信専用の型は**存在しない**のがこの設計の要点。情報は既存アクションに乗る：
 
 - `give`（[02-resources.md](./resources.md)）：贈与数量にビットを乗せる。量子化の粗さ（qty の刻み 1/1000、[90-open-questions.md](./open-questions.md) #3）が通信帯域の価格を決める。
-- `introduce` / `introduced` / `encountered`（[human.md](./human.md)）：紹介そのものがシグナル（紹介コスト = アクション枠）。
+- `introduce` / `introduced` / `encountered`（[human.md](./human.md)）：紹介そのものがシグナル（紹介コスト = アクション枠）。→ **実装済み**: introduce は「自分の知人 to に自分の知人 subject を紹介して知人にする」。双方に introduced が届く。親密度は増やさない（紹介は出会いの提供であって相互作用の当事者ではない）。参照実装では親が成人した子を自分の人脈に紹介する = **見合いの創発**として使われ、第二世代の婚姻市場を成立させている。
 - `limit-order`（[04-market.md](./market.md)）：板は記名なので、注文の出し方自体が公開シグナルになる。
 
 ## 約束（コミットメント）
