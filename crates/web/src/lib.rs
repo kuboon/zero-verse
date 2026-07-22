@@ -1,4 +1,4 @@
-//! ブラウザ実行系（GitHub Pages ビューワ → docs/viewer/）。
+//! ブラウザ実行系（GitHub Pages ビューワ → pages/static/play/）。
 //!
 //! エンジン（zeroverse-core）を wasm-bindgen でブラウザ用 wasm にし、
 //! brain / scenario component は jco transpile した JS glue から接続する。

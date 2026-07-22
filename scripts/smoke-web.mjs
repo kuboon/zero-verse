@@ -1,4 +1,4 @@
-// ブラウザ実行系（docs/viewer/）のヘッドレススモークテスト。
+// ブラウザ実行系（pages/static/play/）のヘッドレススモークテスト。
 // jco transpile した brain / scenario component を wasm-bindgen 版 engine に接続し、
 // ネイティブの E2E（zeroverse-wasm run --seed 42 --years 30）と同じランを回して
 // クリア判定まで通す。ブラウザ固有なのは DOM だけで、実行経路はビューワと同一。
@@ -11,9 +11,9 @@ import {
   makeBrainRunner,
   makeScenario,
   createRun,
-} from '../docs/viewer/runtime.js';
+} from '../pages/static/play/runtime.js';
 
-const gen = new URL('../docs/viewer/gen/', import.meta.url);
+const gen = new URL('../pages/static/play/gen/', import.meta.url);
 // node の fetch は file: を扱えないので readFile で差し替える
 const fetchBytes = async (url) => (await readFile(new URL(url))).buffer;
 

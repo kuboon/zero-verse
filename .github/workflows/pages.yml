@@ -7,6 +7,8 @@ on:
 
 jobs:
   pages:
+    # A reusable workflow runs with the CALLER's token permissions, so these
+    # must be granted here — the callee cannot add them.
     permissions:
       contents: read
       pages: write
@@ -14,12 +16,6 @@ jobs:
       id-token: write
     uses: kuboon/workflows/.github/workflows/github-page-with-preview.yaml@main
     with:
-      # Equivalent to actions/jekyll-build-pages@v1 (that action only exposes a
-      # `uses:` step, but the reusable workflow only invokes build-command as a
-      # shell command), pointed at docs/ with BASE_URL wired into --baseurl.
-      build-command: |
-        export BUNDLE_GEMFILE=docs/Gemfile
-        sudo -E gem install bundler --no-document
-        sudo -E bundle install
-        baseurl="$(printf '%s' "$BASE_URL" | sed -E 's#^https?://[^/]+##')"
-        bundle exec jekyll build --source docs --destination dist --baseurl "$baseurl"
+      # `mise run build` (the default) installs Deno and runs `deno task build`
+      # in pages/ (see mise.toml), with BASE_URL set by the workflow.
+      dist-dir: pages/dist

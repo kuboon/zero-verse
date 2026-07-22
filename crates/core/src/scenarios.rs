@@ -1,4 +1,4 @@
-//! M1 シナリオ: 交易は自給自足に勝つか（docs/PLAN.md M1）。
+//! M1 シナリオ: 交易は自給自足に勝つか（pages/content/docs/plan.md M1）。
 //!
 //! セットアップ:
 //! - human は「食べられる primary（食文化 E_edible）」と「高熟練の harvest（H_specialty）」
@@ -6,7 +6,7 @@
 //! - 自給自足 brain: 低熟練で自分の食料を採り、食べる。
 //! - 交易 brain: 高熟練で specialty を採り、補完的なパートナー（相手の edible = 自分の
 //!   specialty）と give で交換して食べる。
-//! - 生涯消費 = 食事の Δg 総和（docs/design/07-scoring.md）。比 > 1.0 が M1 合格基準。
+//! - 生涯消費 = 食事の Δg 総和（pages/content/docs/scoring.md）。比 > 1.0 が M1 合格基準。
 //!
 //! 参照 brain は snapshot と自分の割り当て（生得知識に相当）だけで動く。
 //! 他人の在庫・skill は観測していない。
@@ -141,7 +141,7 @@ pub fn build_m1(seed: u64, n_pairs: usize, params: WorldParams) -> M1Setup {
             world.grant_skill(hid, edible, low); // H_edible（低）
         }
 
-        // 交易ペアは初期知人（world 生成の初期知人グラフ → docs/design/world.md）
+        // 交易ペアは初期知人（world 生成の初期知人グラフ → pages/content/docs/world.md）
         world.add_acquaintance(a, b);
 
         let rid = |p: usize| world.laws.id_of_index[p];
@@ -234,7 +234,7 @@ pub fn run_m1(seed: u64, n_pairs: usize, years: u32, params: WorldParams) -> M1R
 }
 
 // ---------------------------------------------------------------------------
-// M2: 貨幣は創発するか（docs/PLAN.md M2）
+// M2: 貨幣は創発するか（pages/content/docs/plan.md M2）
 //
 // セットアップ: human k は specialty = k%5 を高熟練で採り、edible = (k+2)%5 しか
 // 食べられない。+2 シフトにより**直接の двой方向一致（欲望の二重の一致）が存在しない**:
@@ -488,7 +488,7 @@ pub fn run_m2(seed: u64, years: u32, params: WorldParams) -> M2Result {
 }
 
 // ---------------------------------------------------------------------------
-// M3: skill の売買は自発するか（docs/PLAN.md M3）
+// M3: skill の売買は自発するか（pages/content/docs/plan.md M3）
 //
 // セットアップ: 教師 2 人（H_0 高熟練）と徒弟 4 人（harvest skill なし）。
 // 徒弟は初期食料が尽きる前に H_0 を習得する必要があり、教育の対価を
@@ -769,7 +769,7 @@ pub fn run_m3(seed: u64, secret: bool, years: u32, params: WorldParams) -> M3Res
 }
 
 // ---------------------------------------------------------------------------
-// M4: 血縁は投資行動に現れるか（docs/PLAN.md M4）
+// M4: 血縁は投資行動に現れるか（pages/content/docs/plan.md M4）
 //
 // world 側に家族という概念は無い。あるのは親密度（公理 10）と出産の観測非対称だけ。
 // - 夫婦: 月次の贈与が親密度を積み、相対親密度が相互 50% を超えると conceive が自動発生
@@ -1205,7 +1205,7 @@ pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
 }
 
 // ---------------------------------------------------------------------------
-// M4 派生実験 1: 同族内婚は不利か（docs/PLAN.md M4 持ち越し）
+// M4 派生実験 1: 同族内婚は不利か（pages/content/docs/plan.md M4 持ち越し）
 //
 // 2 つの氏族（clan）に別々の食文化と harvest 技能を持たせる。
 // - 同族内婚（endogamy）: 夫婦とも同じ氏族 → 子に流れる技能は 1 系統
@@ -1419,7 +1419,7 @@ impl Brain for SpouseBrain {
         let cooperate =
             snap.now == 0 || self.months_since_received <= self.patience_months || olive_branch;
         // 贈与額は軽くてよい: 親密度の増分は相互作用の回数で決まり量に依らない
-        //（トークン贈与。M4 の親密度仕様 → docs/design/human.md）
+        //（トークン贈与。M4 の親密度仕様 → pages/content/docs/human.md）
         if cooperate && held(snap, self.edible) > QTY_SCALE {
             acts.push(Act::Give {
                 to: self.partner,
@@ -1946,7 +1946,7 @@ mod tests {
     use super::*;
 
     /// M1 合格基準: 交易 brain の生涯消費 ÷ 自給自足 brain の生涯消費 > 1.0 が
-    /// 複数シードで安定して成立する（docs/PLAN.md）。
+    /// 複数シードで安定して成立する（pages/content/docs/plan.md）。
     #[test]
     fn trade_beats_autarky_across_seeds() {
         for seed in 1..=5 {
@@ -1962,7 +1962,7 @@ mod tests {
     }
 
     /// M2 合格基準: 取引が特定の一つの resource を経由する間接交換に集中し（貨幣の創発）、
-    /// 選ばれる resource が劣化率 λ（貯蔵性）と整合する（docs/PLAN.md）。
+    /// 選ばれる resource が劣化率 λ（貯蔵性）と整合する（pages/content/docs/plan.md）。
     ///
     /// 「整合」の定式化: 選ばれた媒介の λ が、最も貯蔵性の高い primary の λ 以下。
     /// シードによっては λ=0 の**廃棄物**が媒介に選ばれる（腐らないが無価値 —
@@ -1991,7 +1991,7 @@ mod tests {
         }
     }
 
-    /// M4 合格基準（docs/PLAN.md）:
+    /// M4 合格基準（pages/content/docs/plan.md）:
     /// - 血縁構造が投資行動に現れる: world 側に家族概念を書かずに、親から子への
     ///   無償の teach で harvest skill が世代間伝達される
     /// - conceive は親密度から自動発生し（出生 > 0）、Westermarck 刷り込みにより
@@ -2079,7 +2079,7 @@ mod tests {
         }
     }
 
-    /// M3 合格基準（docs/PLAN.md）:
+    /// M3 合格基準（pages/content/docs/plan.md）:
     /// - world 側に価格も契約も置かずに、skill の対価付き教育（if-taught-me の月払いを
     ///   伴う teach/learn の対）が継続的に成立する
     /// - 秘匿（売らない）と公開（売って模倣される）の両戦略が観測される:

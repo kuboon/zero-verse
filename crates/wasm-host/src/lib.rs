@@ -3,7 +3,7 @@
 //! - brain component（wit/world.wit の world brain）を core の Brain trait に載せる。
 //! - scenario component（wit-scenario/scenario.wit）で world の初期化とクリア判定を行う。
 //!
-//! 不変の原則（docs/design/09-wit-draft.md）の実装対応:
+//! 不変の原則（pages/content/docs/wit.md）の実装対応:
 //! - 呼び出しごとに新規インスタンス化（InstancePre。Module 共有は可）
 //! - fuel 計量は決定論的な命令数ベース。消費は health 減少に写像（Decision.fuel_used）
 //! - fuel 切れ / trap は部分実行: それまでに push 済みの宣言は有効
@@ -291,7 +291,7 @@ impl WasmBrain {
 
 impl Brain for WasmBrain {
     fn decide(&mut self, snap: &Snapshot) -> Decision {
-        // 思考予算 fuel-budget = health × fuel-per-health（docs/design/human.md）
+        // 思考予算 fuel-budget = health × fuel-per-health（pages/content/docs/human.md）
         let budget = snap.health / 1000 * self.params.fuel_per_health;
         let mut store = Store::new(
             &self.engine,

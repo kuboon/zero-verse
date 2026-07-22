@@ -1,7 +1,7 @@
 //! zeroverse engine core (P0)
 //!
 //! 決定論 lockstep シミュレーション。同一シード → バイト単位で同一の歴史。
-//! 設計は docs/design/ を source of truth とする。
+//! 設計は pages/content/docs/ を source of truth とする。
 //!
 //! P0 スコープ:
 //! - tick パイプライン（自発変換 → 環境変換 → decide → resolve → upkeep）
@@ -22,7 +22,7 @@ pub type Qty = u64;
 pub type HumanId = u64;
 pub type ResourceId = u64;
 
-/// qty は 1/1000 固定小数点（docs/design/02-resources.md）
+/// qty は 1/1000 固定小数点（pages/content/docs/resources.md）
 pub const QTY_SCALE: u64 = 1000;
 
 /// stats の上限 100.000
@@ -60,7 +60,7 @@ pub struct WorldParams {
     pub eat_health_per_unit: Qty,
     /// ε: 偶発的出会いの確率（千分率/月。公理 6）
     pub epsilon_permille: u64,
-    /// 思考コスト換算: health 0.001 あたりの fuel（docs/design/human.md）
+    /// 思考コスト換算: health 0.001 あたりの fuel（pages/content/docs/human.md）
     pub fuel_per_health: u64,
     /// 教育完了に必要な進捗ポイント（毎月 教師熟練% × 学習者cognition% が貯まる）
     pub teach_progress_needed: u64,
@@ -85,7 +85,7 @@ pub struct WorldParams {
     pub gestation_months: u32,
     pub birth_health_cost: Qty,
     /// 見かけの年齢の補正係数 β（‰）。vitality = (health+strength)/2 ÷ STAT_MAX として
-    /// apparent-age = age × (1 + β(1 − vitality))（→ docs/design/human.md）
+    /// apparent-age = age × (1 + β(1 − vitality))（→ pages/content/docs/human.md）
     pub apparent_age_beta_permille: u64,
 }
 
