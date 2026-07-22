@@ -1995,6 +1995,17 @@ export function instantiate(getCoreModule, imports, instantiateCore = (module, i
   }
   
   
+  function toInt8(val) {
+    
+    val >>>= 0;
+    val %= 2 ** 8;
+    if (val >= 2 ** 7) {
+      val -= 2 ** 8;
+    }
+    return val;
+  }
+  
+  
   function toUint32(val) {
     
     return val >>> 0;
@@ -3708,122 +3719,103 @@ let gen = (function* _initGenerator () {
     var {id: v2_0, ageMonths: v2_1, sex: v2_2, stats: v2_3, resources: v2_4, spaceUsed: v2_5, spaceFree: v2_6, skills: v2_7, availableActions: v2_8, fuelBudget: v2_9, memoryLimit: v2_10 } = v1_2;
     dataView(memory0).setBigInt64(ptr0 + 16, toUint64(v2_0), true);
     dataView(memory0).setInt32(ptr0 + 24, toUint32(v2_1), true);
-    var val3 = v2_2;
-    let enum3;
-    switch (val3) {
-      case 'female': {
-        enum3 = 0;
-        break;
-      }
-      case 'male': {
-        enum3 = 1;
-        break;
-      }
-      default: {
-        if ((v2_2) instanceof Error) {
-          console.error(v2_2);
-        }
-        
-        throw new TypeError(`"${val3}" is not one of the cases of sex`);
-      }
-    }
-    dataView(memory0).setInt8(ptr0 + 28, enum3, true);
-    var vec6 = v2_3;
-    var len6 = vec6.length;
-    var result6 = realloc0(0, 0, 8, len6 * 16);
-    for (let i = 0; i < vec6.length; i++) {
-      const e = vec6[i];
-      const base = result6 + i * 16;var {kind: v4_0, value: v4_1 } = e;
-      var val5 = v4_0;
-      let enum5;
-      switch (val5) {
+    dataView(memory0).setInt8(ptr0 + 28, toInt8(v2_2), true);
+    var vec5 = v2_3;
+    var len5 = vec5.length;
+    var result5 = realloc0(0, 0, 8, len5 * 16);
+    for (let i = 0; i < vec5.length; i++) {
+      const e = vec5[i];
+      const base = result5 + i * 16;var {kind: v3_0, value: v3_1 } = e;
+      var val4 = v3_0;
+      let enum4;
+      switch (val4) {
         case 'health': {
-          enum5 = 0;
+          enum4 = 0;
           break;
         }
         case 'strength': {
-          enum5 = 1;
+          enum4 = 1;
           break;
         }
         case 'cognition': {
-          enum5 = 2;
+          enum4 = 2;
           break;
         }
         case 'fertility': {
-          enum5 = 3;
+          enum4 = 3;
           break;
         }
         default: {
-          if ((v4_0) instanceof Error) {
-            console.error(v4_0);
+          if ((v3_0) instanceof Error) {
+            console.error(v3_0);
           }
           
-          throw new TypeError(`"${val5}" is not one of the cases of stat-kind`);
+          throw new TypeError(`"${val4}" is not one of the cases of stat-kind`);
         }
       }
-      dataView(memory0).setInt8(base + 0, enum5, true);
-      dataView(memory0).setBigInt64(base + 8, toUint64(v4_1), true);
+      dataView(memory0).setInt8(base + 0, enum4, true);
+      dataView(memory0).setBigInt64(base + 8, toUint64(v3_1), true);
     }
-    dataView(memory0).setUint32(ptr0 + 36, len6, true);
-    dataView(memory0).setUint32(ptr0 + 32, result6, true);
-    var vec8 = v2_4;
-    var len8 = vec8.length;
-    var result8 = realloc0(0, 0, 8, len8 * 16);
-    for (let i = 0; i < vec8.length; i++) {
-      const e = vec8[i];
-      const base = result8 + i * 16;var {resource: v7_0, amount: v7_1 } = e;
-      dataView(memory0).setBigInt64(base + 0, toUint64(v7_0), true);
-      dataView(memory0).setBigInt64(base + 8, toUint64(v7_1), true);
+    dataView(memory0).setUint32(ptr0 + 36, len5, true);
+    dataView(memory0).setUint32(ptr0 + 32, result5, true);
+    var vec7 = v2_4;
+    var len7 = vec7.length;
+    var result7 = realloc0(0, 0, 8, len7 * 16);
+    for (let i = 0; i < vec7.length; i++) {
+      const e = vec7[i];
+      const base = result7 + i * 16;var {resource: v6_0, amount: v6_1 } = e;
+      dataView(memory0).setBigInt64(base + 0, toUint64(v6_0), true);
+      dataView(memory0).setBigInt64(base + 8, toUint64(v6_1), true);
     }
-    dataView(memory0).setUint32(ptr0 + 44, len8, true);
-    dataView(memory0).setUint32(ptr0 + 40, result8, true);
+    dataView(memory0).setUint32(ptr0 + 44, len7, true);
+    dataView(memory0).setUint32(ptr0 + 40, result7, true);
     dataView(memory0).setBigInt64(ptr0 + 48, toUint64(v2_5), true);
     dataView(memory0).setBigInt64(ptr0 + 56, toUint64(v2_6), true);
-    var vec10 = v2_7;
-    var len10 = vec10.length;
-    var result10 = realloc0(0, 0, 8, len10 * 16);
-    for (let i = 0; i < vec10.length; i++) {
-      const e = vec10[i];
-      const base = result10 + i * 16;var {skill: v9_0, proficiency: v9_1 } = e;
-      dataView(memory0).setBigInt64(base + 0, toUint64(v9_0), true);
-      dataView(memory0).setBigInt64(base + 8, toUint64(v9_1), true);
+    var vec9 = v2_7;
+    var len9 = vec9.length;
+    var result9 = realloc0(0, 0, 8, len9 * 16);
+    for (let i = 0; i < vec9.length; i++) {
+      const e = vec9[i];
+      const base = result9 + i * 16;var {skill: v8_0, proficiency: v8_1 } = e;
+      dataView(memory0).setBigInt64(base + 0, toUint64(v8_0), true);
+      dataView(memory0).setBigInt64(base + 8, toUint64(v8_1), true);
     }
-    dataView(memory0).setUint32(ptr0 + 68, len10, true);
-    dataView(memory0).setUint32(ptr0 + 64, result10, true);
-    var vec12 = v2_8;
-    var len12 = vec12.length;
-    var result12 = realloc0(0, 0, 1, len12 * 1);
-    for (let i = 0; i < vec12.length; i++) {
-      const e = vec12[i];
-      const base = result12 + i * 1;var val11 = e;
-      let enum11;
-      switch (val11) {
+    dataView(memory0).setUint32(ptr0 + 68, len9, true);
+    dataView(memory0).setUint32(ptr0 + 64, result9, true);
+    var vec11 = v2_8;
+    var len11 = vec11.length;
+    var result11 = realloc0(0, 0, 1, len11 * 1);
+    for (let i = 0; i < vec11.length; i++) {
+      const e = vec11[i];
+      const base = result11 + i * 1;var val10 = e;
+      let enum10;
+      switch (val10) {
         case 'invoke': {
-          enum11 = 0;
+          enum10 = 0;
           break;
         }
         case 'give': {
-          enum11 = 1;
+          enum10 = 1;
           break;
         }
         case 'discard': {
-          enum11 = 2;
+          enum10 = 2;
           break;
         }
         case 'teach': {
-          enum11 = 3;
+          enum10 = 3;
           break;
         }
         case 'learn': {
-          enum11 = 4;
+          enum10 = 4;
           break;
         }
         case 'introduce': {
-          enum11 = 5;
+          enum10 = 5;
           break;
         }
         case 'idle': {
-          enum11 = 6;
+          enum10 = 6;
           break;
         }
         default: {
@@ -3831,168 +3823,169 @@ let gen = (function* _initGenerator () {
             console.error(e);
           }
           
-          throw new TypeError(`"${val11}" is not one of the cases of action-kind`);
+          throw new TypeError(`"${val10}" is not one of the cases of action-kind`);
         }
       }
-      dataView(memory0).setInt8(base + 0, enum11, true);
+      dataView(memory0).setInt8(base + 0, enum10, true);
     }
-    dataView(memory0).setUint32(ptr0 + 76, len12, true);
-    dataView(memory0).setUint32(ptr0 + 72, result12, true);
+    dataView(memory0).setUint32(ptr0 + 76, len11, true);
+    dataView(memory0).setUint32(ptr0 + 72, result11, true);
     dataView(memory0).setBigInt64(ptr0 + 80, toUint64(v2_9), true);
     dataView(memory0).setInt32(ptr0 + 88, toUint32(v2_10), true);
-    var vec15 = v1_3;
-    var len15 = vec15.length;
-    var result15 = realloc0(0, 0, 8, len15 * 32);
-    for (let i = 0; i < vec15.length; i++) {
-      const e = vec15[i];
-      const base = result15 + i * 32;var {id: v13_0, apparentAge: v13_1, alive: v13_2, intimacy: v13_3, lastInteraction: v13_4 } = e;
-      dataView(memory0).setBigInt64(base + 0, toUint64(v13_0), true);
-      dataView(memory0).setInt32(base + 8, toUint32(v13_1), true);
-      dataView(memory0).setInt8(base + 12, v13_2 ? 1 : 0, true);
-      dataView(memory0).setBigInt64(base + 16, toUint64(v13_3), true);
-      var variant14 = v13_4;
-      if (variant14 === null || variant14=== undefined) {
+    var vec14 = v1_3;
+    var len14 = vec14.length;
+    var result14 = realloc0(0, 0, 8, len14 * 32);
+    for (let i = 0; i < vec14.length; i++) {
+      const e = vec14[i];
+      const base = result14 + i * 32;var {id: v12_0, apparentAge: v12_1, apparentSex: v12_2, alive: v12_3, intimacy: v12_4, lastInteraction: v12_5 } = e;
+      dataView(memory0).setBigInt64(base + 0, toUint64(v12_0), true);
+      dataView(memory0).setInt32(base + 8, toUint32(v12_1), true);
+      dataView(memory0).setInt8(base + 12, toInt8(v12_2), true);
+      dataView(memory0).setInt8(base + 13, v12_3 ? 1 : 0, true);
+      dataView(memory0).setBigInt64(base + 16, toUint64(v12_4), true);
+      var variant13 = v12_5;
+      if (variant13 === null || variant13=== undefined) {
         dataView(memory0).setInt8(base + 24, 0, true);
       } else {
-        const e = variant14;
+        const e = variant13;
         dataView(memory0).setInt8(base + 24, 1, true);
         dataView(memory0).setInt32(base + 28, toUint32(e), true);
       }
     }
-    dataView(memory0).setUint32(ptr0 + 100, len15, true);
-    dataView(memory0).setUint32(ptr0 + 96, result15, true);
-    var vec30 = v1_4;
-    var len30 = vec30.length;
-    var result30 = realloc0(0, 0, 8, len30 * 48);
-    for (let i = 0; i < vec30.length; i++) {
-      const e = vec30[i];
-      const base = result30 + i * 48;var variant29 = e;
-      switch (variant29.tag) {
+    dataView(memory0).setUint32(ptr0 + 100, len14, true);
+    dataView(memory0).setUint32(ptr0 + 96, result14, true);
+    var vec29 = v1_4;
+    var len29 = vec29.length;
+    var result29 = realloc0(0, 0, 8, len29 * 48);
+    for (let i = 0; i < vec29.length; i++) {
+      const e = vec29[i];
+      const base = result29 + i * 48;var variant28 = e;
+      switch (variant28.tag) {
         case 'received-transfer': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 0, true);
-          var {from: v16_0, stack: v16_1 } = e;
-          dataView(memory0).setBigInt64(base + 8, toUint64(v16_0), true);
-          var {resource: v17_0, amount: v17_1 } = v16_1;
-          dataView(memory0).setBigInt64(base + 16, toUint64(v17_0), true);
-          dataView(memory0).setBigInt64(base + 24, toUint64(v17_1), true);
+          var {from: v15_0, stack: v15_1 } = e;
+          dataView(memory0).setBigInt64(base + 8, toUint64(v15_0), true);
+          var {resource: v16_0, amount: v16_1 } = v15_1;
+          dataView(memory0).setBigInt64(base + 16, toUint64(v16_0), true);
+          dataView(memory0).setBigInt64(base + 24, toUint64(v16_1), true);
           break;
         }
         case 'trade-executed': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 1, true);
-          var {counterparty: v18_0, gave: v18_1, got: v18_2 } = e;
-          dataView(memory0).setBigInt64(base + 8, toUint64(v18_0), true);
-          var {resource: v19_0, amount: v19_1 } = v18_1;
-          dataView(memory0).setBigInt64(base + 16, toUint64(v19_0), true);
-          dataView(memory0).setBigInt64(base + 24, toUint64(v19_1), true);
-          var {resource: v20_0, amount: v20_1 } = v18_2;
-          dataView(memory0).setBigInt64(base + 32, toUint64(v20_0), true);
-          dataView(memory0).setBigInt64(base + 40, toUint64(v20_1), true);
+          var {counterparty: v17_0, gave: v17_1, got: v17_2 } = e;
+          dataView(memory0).setBigInt64(base + 8, toUint64(v17_0), true);
+          var {resource: v18_0, amount: v18_1 } = v17_1;
+          dataView(memory0).setBigInt64(base + 16, toUint64(v18_0), true);
+          dataView(memory0).setBigInt64(base + 24, toUint64(v18_1), true);
+          var {resource: v19_0, amount: v19_1 } = v17_2;
+          dataView(memory0).setBigInt64(base + 32, toUint64(v19_0), true);
+          dataView(memory0).setBigInt64(base + 40, toUint64(v19_1), true);
           break;
         }
         case 'teach-progressed': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 2, true);
-          var {partner: v21_0, skill: v21_1 } = e;
-          dataView(memory0).setBigInt64(base + 8, toUint64(v21_0), true);
-          dataView(memory0).setBigInt64(base + 16, toUint64(v21_1), true);
+          var {partner: v20_0, skill: v20_1 } = e;
+          dataView(memory0).setBigInt64(base + 8, toUint64(v20_0), true);
+          dataView(memory0).setBigInt64(base + 16, toUint64(v20_1), true);
           break;
         }
         case 'skill-acquired': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 3, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
         case 'introduced': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 4, true);
-          var {via: v22_0, subject: v22_1 } = e;
-          dataView(memory0).setBigInt64(base + 8, toUint64(v22_0), true);
-          dataView(memory0).setBigInt64(base + 16, toUint64(v22_1), true);
+          var {via: v21_0, subject: v21_1 } = e;
+          dataView(memory0).setBigInt64(base + 8, toUint64(v21_0), true);
+          dataView(memory0).setBigInt64(base + 16, toUint64(v21_1), true);
           break;
         }
         case 'encountered': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 5, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
         case 'child-born': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 6, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
         case 'someone-died': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 7, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
         case 'invoke-result': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 8, true);
-          var {skill: v23_0, consumed: v23_1, produced: v23_2, healthGain: v23_3 } = e;
-          dataView(memory0).setBigInt64(base + 8, toUint64(v23_0), true);
-          var vec25 = v23_1;
-          var len25 = vec25.length;
-          var result25 = realloc0(0, 0, 8, len25 * 16);
-          for (let i = 0; i < vec25.length; i++) {
-            const e = vec25[i];
-            const base = result25 + i * 16;var {resource: v24_0, amount: v24_1 } = e;
-            dataView(memory0).setBigInt64(base + 0, toUint64(v24_0), true);
-            dataView(memory0).setBigInt64(base + 8, toUint64(v24_1), true);
+          var {skill: v22_0, consumed: v22_1, produced: v22_2, healthGain: v22_3 } = e;
+          dataView(memory0).setBigInt64(base + 8, toUint64(v22_0), true);
+          var vec24 = v22_1;
+          var len24 = vec24.length;
+          var result24 = realloc0(0, 0, 8, len24 * 16);
+          for (let i = 0; i < vec24.length; i++) {
+            const e = vec24[i];
+            const base = result24 + i * 16;var {resource: v23_0, amount: v23_1 } = e;
+            dataView(memory0).setBigInt64(base + 0, toUint64(v23_0), true);
+            dataView(memory0).setBigInt64(base + 8, toUint64(v23_1), true);
           }
-          dataView(memory0).setUint32(base + 20, len25, true);
-          dataView(memory0).setUint32(base + 16, result25, true);
-          var vec27 = v23_2;
-          var len27 = vec27.length;
-          var result27 = realloc0(0, 0, 8, len27 * 16);
-          for (let i = 0; i < vec27.length; i++) {
-            const e = vec27[i];
-            const base = result27 + i * 16;var {resource: v26_0, amount: v26_1 } = e;
-            dataView(memory0).setBigInt64(base + 0, toUint64(v26_0), true);
-            dataView(memory0).setBigInt64(base + 8, toUint64(v26_1), true);
+          dataView(memory0).setUint32(base + 20, len24, true);
+          dataView(memory0).setUint32(base + 16, result24, true);
+          var vec26 = v22_2;
+          var len26 = vec26.length;
+          var result26 = realloc0(0, 0, 8, len26 * 16);
+          for (let i = 0; i < vec26.length; i++) {
+            const e = vec26[i];
+            const base = result26 + i * 16;var {resource: v25_0, amount: v25_1 } = e;
+            dataView(memory0).setBigInt64(base + 0, toUint64(v25_0), true);
+            dataView(memory0).setBigInt64(base + 8, toUint64(v25_1), true);
           }
-          dataView(memory0).setUint32(base + 28, len27, true);
-          dataView(memory0).setUint32(base + 24, result27, true);
-          dataView(memory0).setBigInt64(base + 32, toUint64(v23_3), true);
+          dataView(memory0).setUint32(base + 28, len26, true);
+          dataView(memory0).setUint32(base + 24, result26, true);
+          dataView(memory0).setBigInt64(base + 32, toUint64(v22_3), true);
           break;
         }
         case 'action-failed': {
-          const e = variant29.val;
+          const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 9, true);
-          var val28 = e;
-          let enum28;
-          switch (val28) {
+          var val27 = e;
+          let enum27;
+          switch (val27) {
             case 'invoke': {
-              enum28 = 0;
+              enum27 = 0;
               break;
             }
             case 'give': {
-              enum28 = 1;
+              enum27 = 1;
               break;
             }
             case 'discard': {
-              enum28 = 2;
+              enum27 = 2;
               break;
             }
             case 'teach': {
-              enum28 = 3;
+              enum27 = 3;
               break;
             }
             case 'learn': {
-              enum28 = 4;
+              enum27 = 4;
               break;
             }
             case 'introduce': {
-              enum28 = 5;
+              enum27 = 5;
               break;
             }
             case 'idle': {
-              enum28 = 6;
+              enum27 = 6;
               break;
             }
             default: {
@@ -4000,57 +3993,57 @@ let gen = (function* _initGenerator () {
                 console.error(e);
               }
               
-              throw new TypeError(`"${val28}" is not one of the cases of action-kind`);
+              throw new TypeError(`"${val27}" is not one of the cases of action-kind`);
             }
           }
-          dataView(memory0).setInt8(base + 8, enum28, true);
+          dataView(memory0).setInt8(base + 8, enum27, true);
           break;
         }
         default: {
-          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant29.tag)}\` (received \`${variant29}\`) specified for \`Event\``);
+          throw new TypeError(`invalid variant tag value \`${JSON.stringify(variant28.tag)}\` (received \`${variant28}\`) specified for \`Event\``);
         }
       }
     }
-    dataView(memory0).setUint32(ptr0 + 108, len30, true);
-    dataView(memory0).setUint32(ptr0 + 104, result30, true);
-    var vec32 = v1_5;
-    var len32 = vec32.length;
-    var result32 = realloc0(0, 0, 8, len32 * 40);
-    for (let i = 0; i < vec32.length; i++) {
-      const e = vec32[i];
-      const base = result32 + i * 40;var {seller: v31_0, giveResource: v31_1, giveAmount: v31_2, wantResource: v31_3, wantAmount: v31_4 } = e;
-      dataView(memory0).setBigInt64(base + 0, toUint64(v31_0), true);
-      dataView(memory0).setBigInt64(base + 8, toUint64(v31_1), true);
-      dataView(memory0).setBigInt64(base + 16, toUint64(v31_2), true);
-      dataView(memory0).setBigInt64(base + 24, toUint64(v31_3), true);
-      dataView(memory0).setBigInt64(base + 32, toUint64(v31_4), true);
+    dataView(memory0).setUint32(ptr0 + 108, len29, true);
+    dataView(memory0).setUint32(ptr0 + 104, result29, true);
+    var vec31 = v1_5;
+    var len31 = vec31.length;
+    var result31 = realloc0(0, 0, 8, len31 * 40);
+    for (let i = 0; i < vec31.length; i++) {
+      const e = vec31[i];
+      const base = result31 + i * 40;var {seller: v30_0, giveResource: v30_1, giveAmount: v30_2, wantResource: v30_3, wantAmount: v30_4 } = e;
+      dataView(memory0).setBigInt64(base + 0, toUint64(v30_0), true);
+      dataView(memory0).setBigInt64(base + 8, toUint64(v30_1), true);
+      dataView(memory0).setBigInt64(base + 16, toUint64(v30_2), true);
+      dataView(memory0).setBigInt64(base + 24, toUint64(v30_3), true);
+      dataView(memory0).setBigInt64(base + 32, toUint64(v30_4), true);
     }
-    dataView(memory0).setUint32(ptr0 + 116, len32, true);
-    dataView(memory0).setUint32(ptr0 + 112, result32, true);
-    var val33 = arg1;
-    var len33 = Array.isArray(val33) ? val33.length : val33.byteLength;
-    var ptr33 = realloc0(0, 0, 1, len33 * 1);
+    dataView(memory0).setUint32(ptr0 + 116, len31, true);
+    dataView(memory0).setUint32(ptr0 + 112, result31, true);
+    var val32 = arg1;
+    var len32 = Array.isArray(val32) ? val32.length : val32.byteLength;
+    var ptr32 = realloc0(0, 0, 1, len32 * 1);
     
-    let valData33;
-    const valLenBytes33 = len33 * 1;
-    if (Array.isArray(val33)) {
+    let valData32;
+    const valLenBytes32 = len32 * 1;
+    if (Array.isArray(val32)) {
       // Regular array likely containing numbers, write values to memory
       let offset = 0;
-      const dv33 = new DataView(memory0.buffer);
-      for (const v of val33) {
+      const dv32 = new DataView(memory0.buffer);
+      for (const v of val32) {
         _requireValidNumericPrimitive.bind(null, 'u8')(v);
-        dv33.setUint8(ptr33+ offset, v, true);
+        dv32.setUint8(ptr32+ offset, v, true);
         offset += 1;
       }
     } else {
       // TypedArray / ArrayBuffer-like, direct copy
-      valData33 = new Uint8Array(val33.buffer || val33, val33.byteOffset, valLenBytes33);
-      const out33 = new Uint8Array(memory0.buffer, ptr33, valLenBytes33);
-      out33.set(valData33);
+      valData32 = new Uint8Array(val32.buffer || val32, val32.byteOffset, valLenBytes32);
+      const out32 = new Uint8Array(memory0.buffer, ptr32, valLenBytes32);
+      out32.set(valData32);
     }
     
-    dataView(memory0).setUint32(ptr0 + 124, len33, true);
-    dataView(memory0).setUint32(ptr0 + 120, ptr33, true);
+    dataView(memory0).setUint32(ptr0 + 124, len32, true);
+    dataView(memory0).setUint32(ptr0 + 120, ptr32, true);
     _debugLog('[iface="zeroverse:world/brain-api@0.1.0", function="decide"][Instruction::CallWasm] enter', {
       funcName: 'decide',
       paramCount: 1,

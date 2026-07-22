@@ -81,8 +81,10 @@ impl commit::Host for HostState {
                 teacher: l.teacher,
                 skill: l.skill,
             },
-            // introduce は M4 でエンジン側実装が入るまで idle 扱い
-            action::Act::Introduce(_) => CoreAct::Idle,
+            action::Act::Introduce(i) => CoreAct::Introduce {
+                to: i.to,
+                subject: i.subject,
+            },
         };
         self.commits.acts.push(act);
     }
@@ -174,10 +176,7 @@ impl WasmBrain {
             self_view: observation::SelfView {
                 id: snap.id,
                 age_months: snap.age_months,
-                sex: match snap.sex {
-                    zeroverse_core::state::Sex::Female => wit_types::Sex::Female,
-                    zeroverse_core::state::Sex::Male => wit_types::Sex::Male,
-                },
+                sex: snap.sex,
                 stats: vec![
                     wit_types::Stat {
                         kind: wit_types::StatKind::Health,
@@ -221,6 +220,7 @@ impl WasmBrain {
                 .map(|v| observation::Acquaintance {
                     id: v.id,
                     apparent_age: v.apparent_age,
+                    apparent_sex: v.apparent_sex,
                     alive: v.alive,
                     intimacy: v.intimacy,
                     // last-interaction はエンジン側未実装のスタブ
@@ -268,6 +268,12 @@ impl WasmBrain {
                         })
                     }
                     E::SkillAcquired(s) => observation::Event::SkillAcquired(*s),
+                    E::Introduced { via, subject } => {
+                        observation::Event::Introduced(observation::IntroductionInfo {
+                            via: *via,
+                            subject: *subject,
+                        })
+                    }
                     E::ChildBorn(c) => observation::Event::ChildBorn(*c),
                     E::ActionFailed => {
                         observation::Event::ActionFailed(observation::ActionKind::Invoke)

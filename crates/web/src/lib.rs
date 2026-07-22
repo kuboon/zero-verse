@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 use zeroverse_core::brain::{Act, Brain, Decision, Event, GiveCondition, Snapshot, StandingOrder};
 use zeroverse_core::laws::SkillKind;
-use zeroverse_core::state::{Sex, World};
+use zeroverse_core::state::World;
 use zeroverse_core::{HumanId, WorldParams};
 
 // ---------------------------------------------------------------------------
@@ -33,13 +33,6 @@ use zeroverse_core::{HumanId, WorldParams};
 struct StackW {
     resource: u64,
     amount: u64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "kebab-case")]
-enum SexW {
-    Female,
-    Male,
 }
 
 #[derive(Serialize)]
@@ -81,7 +74,7 @@ struct SkillViewW {
 struct SelfViewW {
     id: u64,
     age_months: u32,
-    sex: SexW,
+    sex: i8,
     stats: Vec<StatW>,
     resources: Vec<StackW>,
     space_used: u64,
@@ -97,6 +90,7 @@ struct SelfViewW {
 struct AcquaintanceW {
     id: u64,
     apparent_age: u32,
+    apparent_sex: i8,
     alive: bool,
     intimacy: u64,
     last_interaction: Option<u32>,
@@ -126,6 +120,13 @@ struct TeachInfoW {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct IntroductionInfoW {
+    via: u64,
+    subject: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct InvokeResultInfoW {
     skill: u64,
     consumed: Vec<StackW>,
@@ -140,6 +141,7 @@ enum EventW {
     TradeExecuted(TradeInfoW),
     TeachProgressed(TeachInfoW),
     SkillAcquired(u64),
+    Introduced(IntroductionInfoW),
     Encountered(u64),
     ChildBorn(u64),
     SomeoneDied(u64),
@@ -182,10 +184,7 @@ fn wit_snapshot(snap: &Snapshot, fuel_budget: u64) -> SnapshotW {
         self_view: SelfViewW {
             id: snap.id,
             age_months: snap.age_months,
-            sex: match snap.sex {
-                Sex::Female => SexW::Female,
-                Sex::Male => SexW::Male,
-            },
+            sex: snap.sex,
             stats: vec![
                 StatW {
                     kind: StatKindW::Health,
@@ -229,6 +228,7 @@ fn wit_snapshot(snap: &Snapshot, fuel_budget: u64) -> SnapshotW {
             .map(|v| AcquaintanceW {
                 id: v.id,
                 apparent_age: v.apparent_age,
+                apparent_sex: v.apparent_sex,
                 alive: v.alive,
                 intimacy: v.intimacy,
                 // last-interaction はエンジン側未実装のスタブ（wasm-host と同じ）
@@ -274,6 +274,10 @@ fn wit_snapshot(snap: &Snapshot, fuel_budget: u64) -> SnapshotW {
                     skill: *skill,
                 }),
                 Event::SkillAcquired(s) => EventW::SkillAcquired(*s),
+                Event::Introduced { via, subject } => EventW::Introduced(IntroductionInfoW {
+                    via: *via,
+                    subject: *subject,
+                }),
                 Event::ChildBorn(c) => EventW::ChildBorn(*c),
                 Event::ActionFailed => EventW::ActionFailed(ActionKindW::Invoke),
             })
@@ -335,7 +339,6 @@ struct LearnArgsIn {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct IntroduceArgsIn {
     to: u64,
     subject: u64,
@@ -349,7 +352,6 @@ enum ActIn {
     Discard(StackIn),
     Teach(TeachArgsIn),
     Learn(LearnArgsIn),
-    #[allow(dead_code)]
     Introduce(IntroduceArgsIn),
     Idle,
 }
@@ -425,8 +427,10 @@ fn to_core_decision(d: DecisionIn) -> Decision {
                 teacher: l.teacher,
                 skill: l.skill,
             },
-            // introduce は M4 でエンジン側実装が入るまで idle 扱い（wasm-host と同じ）
-            ActIn::Introduce(_) => Act::Idle,
+            ActIn::Introduce(i) => Act::Introduce {
+                to: i.to,
+                subject: i.subject,
+            },
             ActIn::Idle => Act::Idle,
         })
         .collect();
@@ -540,7 +544,8 @@ struct VizHuman {
     group: Option<u32>,
     /// 実験再現ランでの役割ラベル（凡例・色分け用。キャンペーンでは None）
     role: Option<String>,
-    sex: String,
+    /// sex の真値（-10〜+10。全知ビュー）
+    sex: i8,
     age_months: u32,
     health: u64,
     strength: u64,
@@ -787,10 +792,7 @@ fn viz_state(
                 role: roles
                     .and_then(|r| r.get(&h.id).copied())
                     .map(|s| s.to_string()),
-                sex: match h.sex {
-                    Sex::Female => "F".into(),
-                    Sex::Male => "M".into(),
-                },
+                sex: h.sex,
                 age_months: h.age_months,
                 health: h.stats.health,
                 strength: h.stats.strength,

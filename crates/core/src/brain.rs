@@ -5,7 +5,7 @@
 //! エンジンには「commit 済み宣言の列」として渡る — Decision がその列に相当する）。
 
 use crate::laws::SkillId;
-use crate::state::Sex;
+use crate::state::SexValue;
 use crate::{HumanId, Qty, ResourceId};
 
 /// 先月自分に起きたこと（WIT の observation.event に相当。公開 id で表現）
@@ -40,6 +40,8 @@ pub enum Event {
     TeachProgressed { partner: HumanId, skill: SkillId },
     /// skill を獲得した（教育の完了、またはリバースエンジニアリング）
     SkillAcquired(SkillId),
+    /// via に subject を紹介された（introduce の受け手・被紹介者の双方に届く）
+    Introduced { via: HumanId, subject: HumanId },
     /// 出産。**母にのみ届く**。父には 0 歳の知人が現れるだけ（pages/content/docs/kinship.md）
     ChildBorn(HumanId),
     /// 失敗理由は返さない
@@ -55,6 +57,9 @@ pub struct AcquaintanceView {
     /// 見かけの年齢（年）。実年齢 + stats から算出され、実年齢そのものは見えない
     ///（→ pages/content/docs/human.md。健康を損ねた人は老けて見える）
     pub apparent_age: u32,
+    /// 見かけの性別（-10〜+10。真値 + 観測者ペア固定ノイズ）。真値は見えない。
+    /// |値| が大きいほど確信できる。±2〜3 は実際には逆符号の可能性が残る
+    pub apparent_sex: i8,
     pub alive: bool,
 }
 
@@ -95,7 +100,8 @@ pub struct Snapshot {
     pub rand: u64,
     pub id: HumanId,
     pub age_months: u32,
-    pub sex: Sex,
+    /// 自分の sex の真値（-10〜+10。自分の内側は全部見える）
+    pub sex: SexValue,
     pub health: Qty,
     pub strength: Qty,
     pub cognition: Qty,
@@ -139,6 +145,12 @@ pub enum Act {
     Learn {
         teacher: HumanId,
         skill: SkillId,
+    },
+    /// 自分の知人 to に、自分の知人 subject を紹介して知人にする
+    ///（紹介ネットワーク → pages/content/docs/communication.md。見合いの土台）
+    Introduce {
+        to: HumanId,
+        subject: HumanId,
     },
     Idle,
 }

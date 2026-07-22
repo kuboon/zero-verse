@@ -18,14 +18,7 @@ export interface WorldConfig {
   acquaintanceCap: number,
 }
 export type Month = number;
-/**
- * # Variants
- * 
- * ## `"female"`
- * 
- * ## `"male"`
- */
-export type Sex = 'female' | 'male';
+export type Sex = number;
 /**
  * # Variants
  * 

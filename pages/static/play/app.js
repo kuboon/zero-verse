@@ -283,14 +283,23 @@ function draw() {
     ctx.fillStyle = healthColor(h.health);
     ctx.strokeStyle = role ? colorForRole(role) : '#0e1014';
     ctx.lineWidth = role ? 2 : 1;
-    if (h.sex === 'F') {
+    if (h.sex < 0) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    } else {
+    } else if (h.sex > 0) {
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
       ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
     if (h.pregnant) {
       ctx.strokeStyle = '#f48fb1';
@@ -413,7 +422,7 @@ function drawInspector() {
     <h2>human ${h.id.slice(-4)} <span class="dim">(${h.id})</span></h2>
     <table>
       ${role ? `<tr><th>役割</th><td colspan="2"><span style="color:${colorForRole(role)}">◯</span> ${role}</td></tr>` : ''}
-      <tr><th>性別</th><td colspan="2">${h.sex === 'F' ? '女性 ○' : '男性 □'}${h.pregnant ? '（妊娠中）' : ''}</td></tr>
+      <tr><th>性別</th><td colspan="2">${h.sex < 0 ? '女性 ○' : h.sex > 0 ? '男性 □' : '中性 ◇'}（sex ${h.sex}）${h.pregnant ? '（妊娠中）' : ''}</td></tr>
       <tr><th>年齢</th><td colspan="2">${Math.floor(h.ageMonths / 12)}歳${h.ageMonths % 12}ヶ月</td></tr>
       ${statRow('health', h.health)}
       ${statRow('strength', h.strength)}
