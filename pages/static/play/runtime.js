@@ -18,10 +18,15 @@ export async function defaultFetchBytes(url) {
   return await res.arrayBuffer();
 }
 
+/** bust（キャッシュバスト版数）付きの URL を作る。node の file:// ではクエリを付けない */
+function busted(url, bust) {
+  return bust ? `${url}?v=${bust}` : url;
+}
+
 /** wasm-bindgen 生成の engine モジュールをロードする */
-export async function loadEngine(engineDirUrl, fetchBytes = defaultFetchBytes) {
-  const mod = await import(new URL('zeroverse_web.js', engineDirUrl).href);
-  const bytes = await fetchBytes(new URL('zeroverse_web_bg.wasm', engineDirUrl).href);
+export async function loadEngine(engineDirUrl, fetchBytes = defaultFetchBytes, bust) {
+  const mod = await import(busted(new URL('zeroverse_web.js', engineDirUrl).href, bust));
+  const bytes = await fetchBytes(busted(new URL('zeroverse_web_bg.wasm', engineDirUrl).href, bust));
   await mod.default({ module_or_path: await WebAssembly.compile(bytes) });
   return mod;
 }
@@ -31,12 +36,12 @@ export async function loadEngine(engineDirUrl, fetchBytes = defaultFetchBytes) {
  * manifest.json が無い場合は <name>.core.wasm, core2, ... を順に探す。
  * 返り値: { instantiate(imports) => exports（呼ぶたびに新規インスタンス） }
  */
-export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes) {
-  const mod = await import(new URL(`${name}.js`, dirUrl).href);
+export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes, bust) {
+  const mod = await import(busted(new URL(`${name}.js`, dirUrl).href, bust));
   let cores;
   try {
     const m = JSON.parse(
-      new TextDecoder().decode(await fetchBytes(new URL('manifest.json', dirUrl).href)),
+      new TextDecoder().decode(await fetchBytes(busted(new URL('manifest.json', dirUrl).href, bust))),
     );
     cores = m.cores;
   } catch {
@@ -44,7 +49,7 @@ export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes
     for (let i = 1; ; i++) {
       const file = i === 1 ? `${name}.core.wasm` : `${name}.core${i}.wasm`;
       try {
-        await fetchBytes(new URL(file, dirUrl).href);
+        await fetchBytes(busted(new URL(file, dirUrl).href, bust));
         cores.push(file);
       } catch {
         break;
@@ -53,7 +58,7 @@ export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes
   }
   const modules = new Map();
   for (const file of cores) {
-    const bytes = await fetchBytes(new URL(file, dirUrl).href);
+    const bytes = await fetchBytes(busted(new URL(file, dirUrl).href, bust));
     modules.set(file, await WebAssembly.compile(bytes));
   }
   const getCoreModule = (path) => {

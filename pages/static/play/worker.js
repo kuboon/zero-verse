@@ -13,13 +13,19 @@
 //   step  {months}                     → {state, series: [月ごとの集計]}
 //   judge {}                           → {result: {type:'verdict'|'summary', ...}}
 
-import {
-  loadEngine,
-  loadComponent,
-  makeBrainRunner,
-  makeScenario,
-  createRun,
-} from './runtime.js';
+// 自分の URL の ?v=（app.js の PROTOCOL_VERSION）を配下資産にも伝搬させる。
+// これで版バンプ 1 つで runtime / engine / component のキャッシュがまとめて破棄される
+const V = new URL(self.location.href).searchParams.get('v');
+
+// 受信口を先に開ける: module worker はモジュール評価が最初の top-level await に
+// 達した時点でメッセージポートが有効になり、ハンドラ未設定のまま届いた message は
+// 落ちる。app.js は worker 生成直後に init を投げるので、まずキューで受ける
+const earlyMessages = [];
+self.onmessage = (e) => earlyMessages.push(e);
+
+const { loadEngine, loadComponent, makeBrainRunner, makeScenario, createRun } = await import(
+  V ? `./runtime.js?v=${V}` : './runtime.js'
+);
 
 // ビルトインのシナリオ（campaign の dir/name は docs/viewer/gen/ に build-web.sh が置く）
 const SCENARIOS = {
@@ -45,7 +51,7 @@ let run = null; // {world: WebWorld|WebExperiment, judge: () => result}
 async function handle(cmd, args) {
   if (cmd === 'init') {
     if (!engine) {
-      engine = await loadEngine(new URL('gen/engine/', import.meta.url));
+      engine = await loadEngine(new URL('gen/engine/', import.meta.url), undefined, V);
     }
     // args.campaign はプロトコル v1（旧 app.js）の互換。キャッシュ由来の
     // 旧 app + 新 worker の組でも campaign-m1 として動くようにする
@@ -80,7 +86,7 @@ async function handle(cmd, args) {
         if (!cache.has(row.brain)) {
           cache.set(
             row.brain,
-            makeBrainRunner(await loadComponent(new URL(b.dir, import.meta.url), b.name)),
+            makeBrainRunner(await loadComponent(new URL(b.dir, import.meta.url), b.name, undefined, V)),
           );
         }
         runners.push(cache.get(row.brain));
@@ -111,14 +117,14 @@ async function handle(cmd, args) {
       return { state: world.state(), isExperiment: false, groupNames: names };
     } else {
       const scenario = makeScenario(
-        await loadComponent(new URL(sc.dir, import.meta.url), sc.name),
+        await loadComponent(new URL(sc.dir, import.meta.url), sc.name, undefined, V),
       );
       const brains = new Map();
       const b = BRAINS[args.brain];
       if (b === undefined) throw new Error(`unknown brain: ${args.brain}`);
       if (b) {
         const runner = makeBrainRunner(
-          await loadComponent(new URL(b.dir, import.meta.url), b.name),
+          await loadComponent(new URL(b.dir, import.meta.url), b.name, undefined, V),
         );
         // どの brain-group にも同じ component を割り当てる（ランナー共有 = コード共有。
         // インスタンスは decide ごとに新規なのでテレパシーは起きない）
@@ -176,5 +182,7 @@ self.onmessage = async (e) => {
     self.postMessage({ id, ok: false, error: String(err?.stack ?? err) });
   }
 };
+// import 中に届いていた message を処理する
+for (const e of earlyMessages) self.onmessage(e);
 
 self.postMessage({ id: 0, ok: true, ready: true });
