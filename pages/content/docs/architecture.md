@@ -13,7 +13,9 @@ summary: 決定論チェックリスト・三形態デプロイ
 - 三形態に同じコアを載せる：
   1. **ネイティブ**（採点用大規模ラン）
   2. **Durable Objects**（スローモーの人間参加 realm）
-  3. **ブラウザ WASM**（ローカル観戦とデバッグ）— 実装済み（`crates/web` + `pages/static/play/`）。ブラウザは component model をネイティブ実行できないため、brain / scenario component は jco transpile した core wasm + JS glue で接続する。JS glue が wasmtime Linker 相当（commit 収集・decide ごとの新規インスタンス化）。ただし **fuel 計量は無い**（fuel_used = 0）ので、思考コストが効く world ではネイティブと歴史が分かれる。公式ランは常にネイティブ形態
+  3. **ブラウザ WASM**（ローカル観戦とデバッグ）— 実装済み（`crates/web` + `pages/static/play/`）。ブラウザは component model をネイティブ実行できないため、brain / scenario component は jco transpile した core wasm + JS glue で接続する。JS glue が wasmtime Linker 相当（commit 収集・decide ごとの新規インスタンス化）。ただし **fuel 計量は無い**（fuel_used = 0）ので、思考コストが効く world ではネイティブと歴史が分かれる。公式ランは常にネイティブ形態。
+     - **ブラウザ fuel の設計判断**（記録）: Worker 分割では fuel は得られない（得られるのは wall-clock watchdog = 非決定論的な暴走対策のみ）。ブラウザで決定論的な fuel が要るなら **core wasm への命令数カウンタ計装**（ビルド時に jco 出力の .core.wasm を変換）が正道。計装 fuel は決定論的だが wasmtime の計量とはスケールが異なるため、ネイティブとの hash 一致は fuel ゼロ域に限られる（現状と同じ）。
+     - **brain ごとの Worker 分割**（記録）: component ABI とは独立に可能（jco 出力は Worker 上でも動く）。実益は暴走 brain の個別隔離（commit を逐次 postMessage すれば部分実行も保てる）と decide の並列化。ただし engine の step を非同期 2 相（snapshot 収集 → 決定回収 → 解決）に改造する必要がある。GitHub Pages はカスタムヘッダ不可で SharedArrayBuffer（同期ブロッキング）が使えないため、同期呼び出しのままの分割はできない。ユーザ投稿 brain（信頼できないコード）を載せる段で導入する
 
 ## brain 実行
 

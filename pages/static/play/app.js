@@ -15,7 +15,52 @@ let busy = false; // step RPC 実行中
 let owed = 0; // 消化していない月数
 let lastT = 0;
 let selected = null; // 選択中 human id
-let viewMode = 'world'; // 'world' | 'tree' 
+let viewMode = 'world'; // 'world' | 'tree'
+let groupNames = null; // 自由編成: グループ番号 → brain 名（役割表示に使う）
+// 自由編成の行（brain × 人数）
+const CUSTOM_BRAINS = [
+  ['forager', 'forager（wasm）'],
+  ['idle', 'idle'],
+];
+let brainRows = [{ brain: 'forager', count: 10 }];
+
+function renderBrainRows() {
+  const box = $('brainRows');
+  box.innerHTML = '';
+  brainRows.forEach((row, i) => {
+    const span = document.createElement('span');
+    span.className = 'brow';
+    const sel = document.createElement('select');
+    for (const [v, label] of CUSTOM_BRAINS) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = label;
+      if (v === row.brain) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      row.brain = sel.value;
+    });
+    const num = document.createElement('input');
+    num.type = 'number';
+    num.min = '0';
+    num.max = '200';
+    num.value = String(row.count);
+    num.addEventListener('change', () => {
+      row.count = Math.max(0, Math.min(200, Number(num.value) | 0));
+    });
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '×';
+    del.addEventListener('click', () => {
+      brainRows.splice(i, 1);
+      if (brainRows.length === 0) brainRows.push({ brain: 'forager', count: 10 });
+      renderBrainRows();
+    });
+    span.append(sel, num, document.createTextNode('人'), del);
+    box.appendChild(span);
+  });
+}
 const seats = new Map(); // human id → 配置番号（安定）
 let hitboxes = []; // {x, y, r, id}
 
@@ -115,10 +160,17 @@ function isExperimentSelected() {
 }
 
 function syncScenarioControls() {
-  const isExp = isExperimentSelected();
-  // 実験再現は brain 内蔵（CLI と同一のネイティブ参照実装）なので brain 選択は無効
-  $('brain').disabled = isExp;
-  $('judge').textContent = isExp ? '📊 集計' : '⚖ 判定';
+  const v = $('campaign').value;
+  const isExp = v.startsWith('exp-');
+  const isCustom = v === 'custom';
+  // 実験再現は brain 内蔵、自由編成は行エディタで指定するので brain 選択は無効
+  $('brain').disabled = isExp || isCustom;
+  $('brainLabel').classList.toggle('hidden', isCustom);
+  $('brainRows').classList.toggle('hidden', !isCustom);
+  $('addBrainRow').classList.toggle('hidden', !isCustom);
+  $('scaleWrap').classList.toggle('hidden', !isExp);
+  $('judge').textContent = isExp || isCustom ? '📊 集計' : '⚖ 判定';
+  if (isCustom) renderBrainRows();
 }
 
 async function init() {
@@ -134,11 +186,19 @@ async function init() {
   newWorker();
   try {
     const seed = Math.max(0, Math.floor(Number($('seed').value) || 0));
+    const scale = Math.max(1, Math.min(10, Number($('scale').value) | 0 || 1));
     const r = await rpc(
       'init',
-      { seed, scenario: $('campaign').value, brain: $('brain').value },
+      {
+        seed,
+        scenario: $('campaign').value,
+        brain: $('brain').value,
+        scale,
+        comp: brainRows.map((row) => ({ brain: row.brain, count: row.count })),
+      },
       60000,
     );
+    groupNames = r.groupNames ?? null;
     banner(null);
     applyState(r.state);
     setControls({ loaded: true });
@@ -229,7 +289,8 @@ function colorForRole(role) {
   return roleColorMap.get(role);
 }
 function roleOf(h, childSet) {
-  return h.role ?? (childSet.has(h.id) ? '子' : null);
+  const fromGroup = groupNames && h.group != null ? groupNames[h.group] : null;
+  return h.role ?? fromGroup ?? (childSet.has(h.id) ? '子' : null);
 }
 function childSetOf(s) {
   return new Set(s.parentage.map((p) => p.child));
@@ -645,6 +706,10 @@ function drawInspector() {
 
 $('reset').addEventListener('click', init);
 $('campaign').addEventListener('change', syncScenarioControls);
+$('addBrainRow').addEventListener('click', () => {
+  brainRows.push({ brain: 'forager', count: 10 });
+  renderBrainRows();
+});
 $('play').addEventListener('click', () => {
   if (!state) return;
   running = !running;

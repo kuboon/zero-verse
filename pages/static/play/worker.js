@@ -23,6 +23,7 @@ import {
 
 // ビルトインのシナリオ（campaign の dir/name は docs/viewer/gen/ に build-web.sh が置く）
 const SCENARIOS = {
+  custom: { type: 'custom' },
   'campaign-m1': { type: 'component', dir: 'gen/scenario-m1/', name: 'scenario-m1' },
   'exp-m1': { type: 'experiment', kind: 'm1' },
   'exp-m2': { type: 'experiment', kind: 'm2' },
@@ -53,11 +54,61 @@ async function handle(cmd, args) {
     if (!sc) throw new Error(`unknown scenario: ${key}`);
 
     if (sc.type === 'experiment') {
-      const world = new engine.WebExperiment(sc.kind, BigInt(args.seed));
+      const world = new engine.WebExperiment(sc.kind, BigInt(args.seed), args.scale || 1);
       run = {
         world,
         judge: () => ({ type: 'summary', lines: world.summary() }),
       };
+    } else if (sc.type === 'custom') {
+      // 自由編成: 行ごとの brain × 人数。scenario component なし（賦存は engine 側の
+      // M1 風デフォルト）。judge の代わりにグループ別レポートを集計として返す
+      const rows = (args.comp ?? []).filter((r) => (r.count | 0) > 0);
+      if (rows.length === 0) throw new Error('brain の行がありません');
+      const world = engine.WebWorld.freeRun(
+        BigInt(args.seed),
+        Uint32Array.from(rows.map((r) => r.count | 0)),
+      );
+      const cache = new Map();
+      const runners = [];
+      for (const row of rows) {
+        if (row.brain === 'idle') {
+          runners.push(null);
+          continue;
+        }
+        const b = BRAINS[row.brain];
+        if (!b) throw new Error(`unknown brain: ${row.brain}`);
+        if (!cache.has(row.brain)) {
+          cache.set(
+            row.brain,
+            makeBrainRunner(await loadComponent(new URL(b.dir, import.meta.url), b.name)),
+          );
+        }
+        runners.push(cache.get(row.brain));
+      }
+      const groupOf = new Map();
+      for (const h of world.state().humans) groupOf.set(h.id, h.group ?? 0);
+      world.setDecider((idStr, snap, memory) => {
+        // 新生児など未知の id はグループ 0 の brain へ
+        const g = groupOf.get(idStr) ?? 0;
+        const runner = runners[g];
+        if (!runner) return { acts: [], orders: [] };
+        return runner.decide(snap, memory);
+      });
+      const names = rows.map((r, i) => `${r.brain}#${i + 1}`);
+      run = {
+        world,
+        judge: () => {
+          const rep = world.report();
+          return {
+            type: 'summary',
+            lines: rep.groups.map((g) => [
+              names[g.group] ?? `group${g.group}`,
+              `生存 ${g.alive}/${g.total}　平均生涯消費 ${g.meanConsumed.toString()}`,
+            ]),
+          };
+        },
+      };
+      return { state: world.state(), isExperiment: false, groupNames: names };
     } else {
       const scenario = makeScenario(
         await loadComponent(new URL(sc.dir, import.meta.url), sc.name),

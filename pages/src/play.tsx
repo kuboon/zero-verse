@@ -39,6 +39,9 @@ function Play() {
                 <optgroup label="キャンペーン（wasm component + 選択 brain）">
                   <option value="campaign-m1">M1 開拓（scenario-m1）</option>
                 </optgroup>
+                <optgroup label="自由編成">
+                  <option value="custom">自由編成（brain × 人数）</option>
+                </optgroup>
                 <optgroup label="実験再現（brain 内蔵・CLI と同一歴史）">
                   <option value="exp-m1">M1: 交易 vs 自給自足</option>
                   <option value="exp-m2">M2: 貨幣の創発</option>
@@ -59,12 +62,26 @@ function Play() {
                 </optgroup>
               </select>
             </label>
-            <label>
+            <label id="brainLabel">
               brain
               <select id="brain">
                 <option value="forager">forager（wasm component）</option>
                 <option value="idle">idle（何もしない）</option>
               </select>
+            </label>
+            <span id="brainRows" class="brain-rows hidden"></span>
+            <button type="button" id="addBrainRow" class="hidden">
+              ＋追加
+            </button>
+            <label id="scaleWrap" class="hidden">
+              規模 ×<input
+                id="scale"
+                type="number"
+                value="1"
+                min="1"
+                max="10"
+                step="1"
+              />
             </label>
             <label>
               seed <input id="seed" type="number" value="42" min="0" step="1" />

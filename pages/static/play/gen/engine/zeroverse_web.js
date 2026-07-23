@@ -188,6 +188,22 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 
+let cachedUint32ArrayMemory0 = null;
+
+function getUint32ArrayMemory0() {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
+        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
+    }
+    return cachedUint32ArrayMemory0;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
 const WebExperimentFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_webexperiment_free(ptr >>> 0, 1));
@@ -212,13 +228,15 @@ export class WebExperiment {
     /**
      * kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
      *       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
+     * scale はコホート倍率（1 = CLI と同一）。
      * @param {string} kind
      * @param {bigint} seed
+     * @param {number} scale
      */
-    constructor(kind, seed) {
+    constructor(kind, seed, scale) {
         const ptr0 = passStringToWasm0(kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.webexperiment_new(ptr0, len0, seed);
+        const ret = wasm.webexperiment_new(ptr0, len0, seed, scale);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -276,6 +294,14 @@ const WebWorldFinalization = (typeof FinalizationRegistry === 'undefined')
     : new FinalizationRegistry(ptr => wasm.__wbg_webworld_free(ptr >>> 0, 1));
 
 export class WebWorld {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WebWorld.prototype);
+        obj.__wbg_ptr = ptr;
+        WebWorldFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
 
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
@@ -355,6 +381,23 @@ export class WebWorld {
             throw takeFromExternrefTable0(ret[1]);
         }
         return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * 自由編成: グループごとの人数を指定して world を作る（scenario component なし）。
+     * 賦存は M1 風（k 番目の human に harvest/eat の primary k%5 を 100% で付与）、
+     * 初期知人は全体のリング（k ↔ k+1）。judge は無く、report のグループ集計で観る。
+     * @param {bigint} seed
+     * @param {Uint32Array} counts
+     * @returns {WebWorld}
+     */
+    static freeRun(seed, counts) {
+        const ptr0 = passArray32ToWasm0(counts, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.webworld_freeRun(seed, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WebWorld.__wrap(ret[0]);
     }
 }
 if (Symbol.dispose) WebWorld.prototype[Symbol.dispose] = WebWorld.prototype.free;
@@ -659,6 +702,7 @@ function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     __wbg_init.__wbindgen_wasm_module = module;
     cachedDataViewMemory0 = null;
+    cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
 
 

@@ -403,9 +403,8 @@ pub struct M2Setup {
     pub brains: BTreeMap<HumanId, Box<dyn Brain>>,
 }
 
-/// M2 実験世界: 20 human、+2 シフト賦存（直接交換の двой重一致なし）。
-pub fn build_m2(seed: u64, params: WorldParams) -> M2Setup {
-    let n_humans = 20;
+/// M2 実験世界: +2 シフト賦存（直接交換の二重一致なし）。
+pub fn build_m2(seed: u64, n_humans: usize, params: WorldParams) -> M2Setup {
     let mut world = World::new(seed, n_humans, params);
     let ids: Vec<HumanId> = world.humans.keys().copied().collect();
     let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
@@ -481,7 +480,7 @@ fn m2_result(world: &World) -> M2Result {
 
 /// M2 実験: 取引が特定 resource に集中するか（貨幣の創発）。
 pub fn run_m2(seed: u64, years: u32, params: WorldParams) -> M2Result {
-    let mut setup = build_m2(seed, params);
+    let mut setup = build_m2(seed, 20, params);
     let months = years * setup.world.params.months_per_year;
     setup.world.run(months, &mut setup.brains);
     m2_result(&setup.world)
@@ -666,8 +665,8 @@ pub struct M3Setup {
 }
 
 /// M3 実験世界: 教師 2 + 徒弟 4。secret=true なら教師は板で売らない（秘匿戦略）。
-pub fn build_m3(seed: u64, secret: bool, params: WorldParams) -> M3Setup {
-    let mut world = World::new(seed, 6, params);
+pub fn build_m3(seed: u64, secret: bool, n_apprentices: usize, params: WorldParams) -> M3Setup {
+    let mut world = World::new(seed, 2 + n_apprentices, params);
     let ids: Vec<HumanId> = world.humans.keys().copied().collect();
     let (teachers, apprentices) = (&ids[..2], &ids[2..]);
 
@@ -762,7 +761,7 @@ fn m3_result(world: &World, apprentice_ids: &[HumanId], skill_idx: usize) -> M3R
 
 /// M3 実験を回す。
 pub fn run_m3(seed: u64, secret: bool, years: u32, params: WorldParams) -> M3Result {
-    let mut setup = build_m3(seed, secret, params);
+    let mut setup = build_m3(seed, secret, 4, params);
     let months = years * setup.world.params.months_per_year;
     setup.world.run(months, &mut setup.brains);
     m3_result(&setup.world, &setup.apprentice_ids, setup.skill_idx)
@@ -1358,8 +1357,7 @@ pub struct M4Setup {
 
 /// M4 実験世界: 夫婦 6 組。ハーネス（run_family_loop / ExperimentSession）が
 /// 6 歳（baby → kid）と 18 歳（kid → adult）で brain を切り替える。
-pub fn build_m4(seed: u64, params: WorldParams) -> M4Setup {
-    let n_adults = 12;
+pub fn build_m4(seed: u64, n_adults: usize, params: WorldParams) -> M4Setup {
     let mut world = World::new(seed, n_adults, params);
     let ids: Vec<HumanId> = world.humans.keys().copied().collect();
 
@@ -1498,7 +1496,7 @@ fn m4_result(world: &World) -> M4Result {
 
 /// M4 実験: 夫婦 6 組から始め、出生・継承・血縁投資を観測する。
 pub fn run_m4(seed: u64, years: u32, params: WorldParams) -> M4Result {
-    let mut setup = build_m4(seed, params);
+    let mut setup = build_m4(seed, 12, params);
     let months = years * setup.world.params.months_per_year;
     run_family_loop(
         &mut setup.world,
@@ -1538,8 +1536,12 @@ pub struct M4ClansSetup {
     pub roles: BTreeMap<HumanId, &'static str>,
 }
 
-pub fn build_m4_clans(seed: u64, exogamy: bool, params: WorldParams) -> M4ClansSetup {
-    let n_adults = 16;
+pub fn build_m4_clans(
+    seed: u64,
+    exogamy: bool,
+    n_adults: usize,
+    params: WorldParams,
+) -> M4ClansSetup {
     let mut world = World::new(seed, n_adults, params);
     let ids: Vec<HumanId> = world.humans.keys().copied().collect();
 
@@ -1673,7 +1675,7 @@ fn clan_result(world: &World) -> ClanResult {
 }
 
 pub fn run_m4_clans(seed: u64, exogamy: bool, years: u32, params: WorldParams) -> ClanResult {
-    let mut setup = build_m4_clans(seed, exogamy, params);
+    let mut setup = build_m4_clans(seed, exogamy, 16, params);
     let months = years * setup.world.params.months_per_year;
     run_family_loop(
         &mut setup.world,
@@ -1821,8 +1823,7 @@ pub struct M4MarriageSetup {
     pub couples: Vec<(HumanId, HumanId, bool)>,
 }
 
-pub fn build_m4_marriage(seed: u64, params: WorldParams) -> M4MarriageSetup {
-    let n_adults = 16;
+pub fn build_m4_marriage(seed: u64, n_adults: usize, params: WorldParams) -> M4MarriageSetup {
     let mut world = World::new(seed, n_adults, params);
     let ids: Vec<HumanId> = world.humans.keys().copied().collect();
 
@@ -1963,7 +1964,7 @@ fn marriage_result(world: &World, couples: &[(HumanId, HumanId, bool)]) -> Marri
 }
 
 pub fn run_m4_marriage(seed: u64, years: u32, params: WorldParams) -> MarriageResult {
-    let mut setup = build_m4_marriage(seed, params);
+    let mut setup = build_m4_marriage(seed, 16, params);
     let months = years * setup.world.params.months_per_year;
     run_family_loop(
         &mut setup.world,
@@ -2016,11 +2017,13 @@ impl ExperimentSession {
     /// kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
     ///       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
     /// パラメータは CLI の各サブコマンドと同一（M3 は re_permille=20）。
-    pub fn new(kind: &str, seed: u64) -> Option<ExperimentSession> {
+    /// scale はコホートの倍率（1 = CLI と同一。人数を増やした観測用）。
+    pub fn new(kind: &str, seed: u64, scale: u32) -> Option<ExperimentSession> {
         let params = WorldParams::default();
+        let scale = scale.clamp(1, 10) as usize;
         Some(match kind {
             "m1" => {
-                let s = build_m1(seed, 5, params);
+                let s = build_m1(seed, 5 * scale, params);
                 let mut roles = BTreeMap::new();
                 for &id in &s.autarky_ids {
                     roles.insert(id, "自給自足");
@@ -2039,7 +2042,7 @@ impl ExperimentSession {
                 }
             }
             "m2" => {
-                let s = build_m2(seed, params);
+                let s = build_m2(seed, 20 * scale, params);
                 let roles = s.world.humans.keys().map(|&id| (id, "商人")).collect();
                 ExperimentSession {
                     world: s.world,
@@ -2054,7 +2057,7 @@ impl ExperimentSession {
                     re_permille: 20,
                     ..params
                 };
-                let s = build_m3(seed, secret, params);
+                let s = build_m3(seed, secret, 4 * scale, params);
                 let mut roles = BTreeMap::new();
                 for &id in &s.teacher_ids {
                     roles.insert(id, "教師");
@@ -2073,7 +2076,7 @@ impl ExperimentSession {
                 }
             }
             "m4" => {
-                let s = build_m4(seed, params);
+                let s = build_m4(seed, 12 * scale, params);
                 ExperimentSession {
                     world: s.world,
                     brains: s.brains,
@@ -2084,7 +2087,7 @@ impl ExperimentSession {
                 }
             }
             "m4-clans-endo" | "m4-clans-exo" => {
-                let s = build_m4_clans(seed, kind == "m4-clans-exo", params);
+                let s = build_m4_clans(seed, kind == "m4-clans-exo", 16 * scale, params);
                 ExperimentSession {
                     world: s.world,
                     brains: s.brains,
@@ -2095,7 +2098,7 @@ impl ExperimentSession {
                 }
             }
             "m4-marriage" => {
-                let s = build_m4_marriage(seed, params);
+                let s = build_m4_marriage(seed, 16 * scale, params);
                 ExperimentSession {
                     world: s.world,
                     brains: s.brains,
@@ -2469,7 +2472,7 @@ mod tests {
     #[test]
     fn experiment_session_matches_cli_runs() {
         // M1（単純ループ）
-        let mut s = ExperimentSession::new("m1", 7).unwrap();
+        let mut s = ExperimentSession::new("m1", 7, 1).unwrap();
         for _ in 0..120 {
             s.step_month();
         }
@@ -2478,11 +2481,11 @@ mod tests {
         assert_eq!(s.world.state_hash(), b.world.state_hash(), "m1");
 
         // M4 marriage（家族遷移つきループ）
-        let mut s = ExperimentSession::new("m4-marriage", 7).unwrap();
+        let mut s = ExperimentSession::new("m4-marriage", 7, 1).unwrap();
         for _ in 0..120 {
             s.step_month();
         }
-        let mut m = build_m4_marriage(7, WorldParams::default());
+        let mut m = build_m4_marriage(7, 16, WorldParams::default());
         run_family_loop(&mut m.world, &mut m.brains, &mut m.edible_of, 120);
         assert_eq!(s.world.state_hash(), m.world.state_hash(), "m4-marriage");
     }

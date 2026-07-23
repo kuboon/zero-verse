@@ -61,10 +61,10 @@ if (!verdict.cleared) {
 
 // 実験再現ラン（WebExperiment）: 集計が出ること + 決定論
 for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
-  const a = new engine.WebExperiment(kind, 7n);
+  const a = new engine.WebExperiment(kind, 7n, 1);
   a.step(10 * 12);
   const lines = a.summary();
-  const b = new engine.WebExperiment(kind, 7n);
+  const b = new engine.WebExperiment(kind, 7n, 1);
   b.step(10 * 12);
   if (a.state().stateHash !== b.state().stateHash) {
     console.error(`FAIL: experiment ${kind} not deterministic`);
@@ -75,5 +75,23 @@ for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage'])
     process.exit(1);
   }
   console.log(`exp ${kind}: alive=${a.alive()} ${lines[0][0]}=${lines[0][1]}`);
+}
+// 自由編成（freeRun）: グループ割当・レポート・決定論
+{
+  const w = engine.WebWorld.freeRun(11n, Uint32Array.from([3, 2]));
+  const st = w.state();
+  const g0 = st.humans.filter((h) => h.group === 0).length;
+  const g1 = st.humans.filter((h) => h.group === 1).length;
+  if (g0 !== 3 || g1 !== 2) {
+    console.error(`FAIL: freeRun groups ${g0}/${g1}`);
+    process.exit(1);
+  }
+  w.step(24);
+  const rep = w.report();
+  if (rep.groups.length !== 2) {
+    console.error('FAIL: freeRun report groups');
+    process.exit(1);
+  }
+  console.log(`freeRun: alive=${w.alive()} groups=${rep.groups.length}`);
 }
 console.log('smoke ok');
