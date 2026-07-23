@@ -698,6 +698,41 @@ impl WebWorld {
         Ok(w)
     }
 
+    /// 自由編成: グループごとの人数を指定して world を作る（scenario component なし）。
+    /// 賦存は M1 風（k 番目の human に harvest/eat の primary k%5 を 100% で付与）、
+    /// 初期知人は全体のリング（k ↔ k+1）。judge は無く、report のグループ集計で観る。
+    #[wasm_bindgen(js_name = freeRun)]
+    pub fn free_run(seed: u64, counts: Vec<u32>) -> Result<WebWorld, JsValue> {
+        console_error_panic_hook::set_once();
+        let n: usize = counts.iter().map(|&c| c as usize).sum();
+        if n == 0 {
+            return Err(JsValue::from_str("total human count is zero"));
+        }
+        let world = World::new(seed, n, WorldParams::default());
+        let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+        let mut w = WebWorld {
+            world,
+            decider: None,
+            initial: ids.clone(),
+            groups: BTreeMap::new(),
+        };
+        let mut k = 0usize;
+        for (g, &count) in counts.iter().enumerate() {
+            for _ in 0..count {
+                w.groups.insert(ids[k], g as u32);
+                k += 1;
+            }
+        }
+        let np = zeroverse_core::laws::N_PRIMARY;
+        for (k, &hid) in ids.iter().enumerate() {
+            let e = k % np;
+            w.world.grant_skill(hid, e, 100_000); // H_e 100%
+            w.world.grant_skill(hid, np + e, 100_000); // E_e 100%
+            w.world.add_acquaintance(hid, ids[(k + 1) % ids.len()]);
+        }
+        Ok(w)
+    }
+
     /// decider: (idString, snapshot, memory: Uint8Array) => {acts, orders, memory?}
     /// snapshot / 戻り値は WIT 形状（jco の表現規則: camelCase / {tag, val} / u64 = BigInt）。
     #[wasm_bindgen(js_name = setDecider)]
@@ -907,10 +942,11 @@ pub struct WebExperiment {
 impl WebExperiment {
     /// kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
     ///       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
+    /// scale はコホート倍率（1 = CLI と同一）。
     #[wasm_bindgen(constructor)]
-    pub fn new(kind: &str, seed: u64) -> Result<WebExperiment, JsValue> {
+    pub fn new(kind: &str, seed: u64, scale: u32) -> Result<WebExperiment, JsValue> {
         console_error_panic_hook::set_once();
-        let session = zeroverse_core::scenarios::ExperimentSession::new(kind, seed)
+        let session = zeroverse_core::scenarios::ExperimentSession::new(kind, seed, scale)
             .ok_or_else(|| JsValue::from_str(&format!("unknown experiment kind: {kind}")))?;
         Ok(WebExperiment { session })
     }
