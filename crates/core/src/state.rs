@@ -31,6 +31,9 @@ pub struct Human {
     pub stats: Stats,
     /// 妊娠中なら (出産予定月, 父)。女性のみ
     pub pregnant: Option<(u32, HumanId)>,
+    /// 産後不妊の明ける月（出産月 + postpartum_infertile_months）。
+    /// 授乳期の生理的な出生間隔で、この月まで fertility = 0
+    pub postpartum_until: u32,
     /// key は法則グラフの内部 index（公開 id への変換は snapshot 生成時のみ）
     pub inventory: BTreeMap<usize, Qty>,
     /// skill 内部 index → 熟練度
@@ -197,6 +200,7 @@ impl World {
                     f.write_u64(father);
                 }
             }
+            f.write_u32(h.postpartum_until);
             f.write_u64(h.stats.health);
             f.write_u64(h.stats.strength);
             f.write_u64(h.stats.cognition);

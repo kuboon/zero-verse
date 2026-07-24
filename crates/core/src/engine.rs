@@ -71,6 +71,7 @@ impl World {
                         fertility: 50 * QTY_SCALE,
                     },
                     pregnant: None,
+                    postpartum_until: 0,
                     inventory,
                     skills: BTreeMap::new(),
                     learning: BTreeMap::new(),
@@ -364,9 +365,11 @@ impl World {
             human.stats.strength =
                 (human.stats.strength + params.strength_regen_per_month).min(strength_cap);
             human.age_months += 1;
-            // fertility の年齢窓（思春期に開き、閉経で閉じる → pages/content/docs/human.md）
+            // fertility の年齢窓（思春期に開き、閉経で閉じる → pages/content/docs/human.md）。
+            // 産後不妊の期間中も閉じる（出生間隔）
             human.stats.fertility = if human.age_months >= params.puberty_months
                 && human.age_months < params.menopause_months
+                && self.month >= human.postpartum_until
             {
                 50 * QTY_SCALE
             } else {
@@ -489,26 +492,40 @@ impl World {
         self.imprinted.extend(newly);
     }
 
-    /// 相対親密度 = self の全知人への親密度合計に占める相手の割合（‰）
-    fn relative_intimacy_permille(&self, from: HumanId, to: HumanId) -> u64 {
+    /// 配偶者候補内の相対親密度 = 「妊性窓内・sex の符号が逆・非刷り込みの知人」
+    /// への親密度合計に占める相手の割合（‰）。分母を恋愛市場に限定するのが要点:
+    /// 子・親・きょうだいへの親密度は分母に入らないので、血縁投資が
+    /// そのまま避妊になって夫婦あたり実質 1 子で人口が半減していく構造を防ぐ
+    ///（→ pages/content/docs/kinship.md）。
+    fn mate_relative_permille(&self, from: HumanId, to: HumanId) -> u64 {
         let Some(h) = self.humans.get(&from) else {
             return 0;
         };
+        let sign = h.sex.signum();
         let total: u128 = h
             .acquaintances
             .iter()
+            .filter(|&&a| {
+                self.humans
+                    .get(&a)
+                    .map(|ah| {
+                        ah.stats.fertility > 0
+                            && ah.sex.signum() == -sign
+                            && !self.imprinted.contains(&Self::pair_key(from, a))
+                    })
+                    .unwrap_or(false)
+            })
             .map(|&a| self.intimacy_of(from, a) as u128)
             .sum();
-        if total == 0 {
-            return 0;
-        }
-        (self.intimacy_of(from, to) as u128 * 1000 / total) as u64
+        (self.intimacy_of(from, to) as u128 * 1000)
+            .checked_div(total)
+            .unwrap_or(0) as u64
     }
 
-    /// conceive の自動発生: 相対親密度が相互に閾値超 ＋ sex の符号が逆（負側が母）
-    /// ＋ 双方 fertility 窓内 ＋ 非刷り込み ＋ 母側が非妊娠。sex = 0（中性）は
-    /// どの相手とも成立しない。条件を満たす相手が複数なら相互相対親密度の
-    /// 最小値が最大のペア（tie は id）で決定論的に選ぶ。
+    /// conceive の自動発生: 配偶者候補内の相対親密度が相互に閾値超 ＋ sex の
+    /// 符号が逆（負側が母）＋ 双方 fertility 窓内 ＋ 非刷り込み ＋ 母側が非妊娠。
+    /// sex = 0（中性）はどの相手とも成立しない。条件を満たす相手が複数なら
+    /// 相互相対親密度の最小値が最大のペア（tie は id）で決定論的に選ぶ。
     fn resolve_conception(&mut self, month: u32) {
         let threshold = self.params.conceive_rel_permille;
         let human_ids: Vec<HumanId> = self.humans.keys().copied().collect();
@@ -516,7 +533,11 @@ impl World {
             let Some(fh) = self.humans.get(&f) else {
                 continue;
             };
-            if !fh.is_female() || fh.pregnant.is_some() || fh.stats.fertility == 0 {
+            if !fh.is_female()
+                || fh.pregnant.is_some()
+                || fh.stats.fertility == 0
+                || fh.stats.health < self.params.conceive_min_health
+            {
                 continue;
             }
             let candidates: Vec<HumanId> = fh.acquaintances.iter().copied().collect();
@@ -531,8 +552,12 @@ impl World {
                 if self.imprinted.contains(&Self::pair_key(f, m)) {
                     continue;
                 }
-                let a = self.relative_intimacy_permille(f, m);
-                let b = self.relative_intimacy_permille(m, f);
+                // 絶対親密度の下限: 名ばかりの知人（share だけ高い）とは成立しない
+                if self.intimacy_of(f, m) < self.params.conceive_min_intimacy {
+                    continue;
+                }
+                let a = self.mate_relative_permille(f, m);
+                let b = self.mate_relative_permille(m, f);
                 let mutual = a.min(b);
                 if mutual > threshold && best.map(|(s, _)| mutual > s).unwrap_or(true) {
                     best = Some((mutual, m));
@@ -594,6 +619,7 @@ impl World {
                         fertility: 0,
                     },
                     pregnant: None,
+                    postpartum_until: 0,
                     inventory: BTreeMap::new(),
                     skills: inherited_eats.into_iter().collect(),
                     learning: BTreeMap::new(),
@@ -605,9 +631,11 @@ impl World {
             );
             self.parentage.insert(child, (mother, father));
             self.births += 1;
-            // 出産コストは母が負う
+            // 出産コストは母が負う。産後不妊（授乳期）で次の妊娠まで間隔が空く
+            let postpartum = month + self.params.postpartum_infertile_months;
             if let Some(mh) = self.humans.get_mut(&mother) {
                 mh.pregnant = None;
+                mh.postpartum_until = postpartum;
                 mh.stats.health = mh
                     .stats
                     .health

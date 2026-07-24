@@ -84,6 +84,21 @@ pub struct WorldParams {
     /// 妊娠期間と出産の health コスト（女性が負う）
     pub gestation_months: u32,
     pub birth_health_cost: Qty,
+    /// 産後不妊の期間（月）。授乳期の生理的な出生間隔で、出産からこの期間は
+    /// 母の fertility = 0。conceive の恋愛市場 share 条件だけだと妊娠期間おきに
+    /// 出産が起き（ラビットモード）、給餌能力を超えた幼子の餓死で
+    /// コホートが断絶するのを防ぐ
+    pub postpartum_infertile_months: u32,
+    /// 飢餓性無月経: 母側の health がこれ未満だと conceive しない。
+    /// 環境が枯渇したとき、コホートの餓死（オーバーシュート崩壊）より先に
+    /// 出生が止まり、人口が資源容量へ滑らかに追従する
+    pub conceive_min_health: Qty,
+    /// conceive に必要なペア絶対親密度の下限。share（‰）は市場が細いと
+    /// 名ばかりの知人（例: 養育に関与しなかった実父）でも 1000‰ になるため、
+    /// 「実際に築かれた関係」を要求する。刷り込み閾値と同値にすると「未成年期に
+    /// 閾値を超えたペアは刷り込みで不妊・超えないまま成人したペアは減衰で
+    /// 下限に届かず、求愛で新たに築いた関係だけが conceive に至る」構造になる
+    pub conceive_min_intimacy: Qty,
     /// 見かけの年齢の補正係数 β（‰）。vitality = (health+strength)/2 ÷ STAT_MAX として
     /// apparent-age = age × (1 + β(1 − vitality))（→ pages/content/docs/human.md）
     pub apparent_age_beta_permille: u64,
@@ -119,12 +134,18 @@ impl Default for WorldParams {
             intimacy_per_interaction: 2 * QTY_SCALE,
             mother_child_intimacy: 50 * QTY_SCALE,
             imprint_threshold: 10 * QTY_SCALE,
-            conceive_rel_permille: 500,
+            // 400‰: 恋愛市場内で「支配的な絆」を要求しつつ、既婚女性への
+            // 横恋慕の求愛贈与（対称バンプ）が夫婦の share を割り込ませても
+            // 多少は耐える余裕を持たせる（500 だと求愛者 2 人で夫婦が不妊化する）
+            conceive_rel_permille: 400,
             puberty_months: 15 * 12,
             menopause_months: 45 * 12,
             gestation_months: 9,
             birth_health_cost: 10 * QTY_SCALE,
-            apparent_age_beta_permille: 300, // stats 全損なら 3 割老けて見える
+            postpartum_infertile_months: 27, // 出産間隔 = 妊娠 9 + 27 = 3 年
+            conceive_min_health: 40 * QTY_SCALE,
+            conceive_min_intimacy: 10 * QTY_SCALE, // = imprint_threshold
+            apparent_age_beta_permille: 300,       // stats 全損なら 3 割老けて見える
             apparent_sex_noise: 3,
         }
     }

@@ -71,7 +71,7 @@ let hitboxes = []; // {x, y, r, id}
 // worker URL のクエリに付き、worker はこの値を自分の配下資産（runtime.js /
 // engine / component）の URL にも伝搬させるので、ここを 1 つ上げれば
 // HTTP キャッシュ由来の新旧取り違え（旧 worker や旧 engine の混在）が全部防げる
-const PROTOCOL_VERSION = 3;
+const PROTOCOL_VERSION = 4;
 
 function newWorker() {
   if (worker) worker.terminate();
