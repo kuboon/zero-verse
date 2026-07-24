@@ -160,6 +160,86 @@ fn main() {
             }
         }
 
+        // 第 5 引数の年に、妊性女性ごとの縁組み状態をダンプする（デッドロック調査用）
+        if args.get(5).and_then(|s| s.parse::<u32>().ok()) == Some(y) {
+            for (&id, h) in &w.humans {
+                if !(h.is_female() && h.stats.fertility > 0) {
+                    continue;
+                }
+                let mut cands: Vec<(u64, u64, u64)> = h
+                    .acquaintances
+                    .iter()
+                    .filter_map(|&m| {
+                        let mh = w.humans.get(&m)?;
+                        if !mh.is_male()
+                            || mh.stats.fertility == 0
+                            || w.imprinted.contains(&(id.min(m), id.max(m)))
+                        {
+                            return None;
+                        }
+                        Some((rel(id, m).min(rel(m, id)), w.intimacy_of(id, m), m))
+                    })
+                    .collect();
+                cands.sort_unstable_by_key(|&(mutual, _, _)| std::cmp::Reverse(mutual));
+                let top: Vec<String> = cands
+                    .iter()
+                    .take(3)
+                    .map(|(mu, i, _)| format!("{}‰/i{}", mu, i / 1000))
+                    .collect();
+                println!(
+                    "  F{:04} {}歳 候補{}人 top: {}",
+                    id % 10000,
+                    h.age_months / 12,
+                    cands.len(),
+                    top.join(" ")
+                );
+            }
+            // 男性側: 求愛の原資（在庫）と生産力（熟練度）
+            for (&id, h) in &w.humans {
+                if !(h.is_male() && h.stats.fertility > 0) {
+                    continue;
+                }
+                let inv: u64 = h.inventory.values().sum();
+                let prof = h.skills.values().max().copied().unwrap_or(0);
+                println!(
+                    "  M{:04} {}歳 在庫{} 最高熟練{}% health{}",
+                    id % 10000,
+                    h.age_months / 12,
+                    inv / 1000,
+                    prof / 1000,
+                    h.stats.health / 1000,
+                );
+            }
+        }
+
+        let show_env = std::env::var("ZV_ENV").is_ok();
+        if (y % 5 == 0 || w.humans.len() < 10) && show_env {
+            let stocks: Vec<String> = w
+                .env
+                .iter()
+                .take(5)
+                .map(|s| (s / 1000).to_string())
+                .collect();
+            let mut by_res = [0usize; 5];
+            for h in w.humans.values() {
+                let mut best = 0usize;
+                let mut bestv = 0;
+                for (&idx, &amt) in &h.inventory {
+                    if idx < 5 && amt > bestv {
+                        best = idx;
+                        bestv = amt;
+                    }
+                }
+                if bestv > 0 {
+                    by_res[best] += 1;
+                }
+            }
+            println!(
+                "     env: {} | 在庫最多resource別人数: {:?}",
+                stocks.join("/"),
+                by_res
+            );
+        }
         if y % 5 == 0 || w.humans.len() < 10 {
             println!(
                 "{:>4} {:>5} {:>6} {:>6} | {:>4}/{:>4}/{:>4}/{:>4} | {:>5} {:>5} {:>5} {:>6} | {:>6} {:>6}",
