@@ -75,7 +75,7 @@ footer { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 14px 14px; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 10px 12px; flex: 1 1 300px; min-width: 280px;
 }
-canvas#chart { background: #0e1014; border-radius: 4px; max-width: 100%; }
+canvas#chart, canvas#ages { background: #0e1014; border-radius: 4px; max-width: 100%; }
 .envrow { display: flex; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .envrow .ebar { height: 9px; border-radius: 2px; }
 #market table { border-collapse: collapse; font-size: 12px; }
@@ -102,7 +102,7 @@ h1 a:hover { color: var(--accent); }
   #inspector { min-width: 0; max-height: 320px; }
   footer { flex-direction: column; padding: 0 8px 8px; gap: 8px; }
   .panel { min-width: 0; }
-  canvas#chart { width: 100%; height: auto; }
+  canvas#chart, canvas#ages { width: 100%; height: auto; }
   .speed input[type="range"] { width: 110px; }
 }
 

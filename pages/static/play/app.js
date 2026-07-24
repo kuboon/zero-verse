@@ -150,6 +150,7 @@ function applyState(s, extra = []) {
   }
   draw();
   drawChart();
+  drawAges();
   drawEnv();
   drawMarket();
   drawInspector();
@@ -594,6 +595,77 @@ function drawChart() {
     });
     ctx.stroke();
   }
+}
+
+// --- 描画: 年齢分布（人口ピラミッド） --------------------------------------------
+//
+// 生存者を 5 歳刻みでビン分けし、女性（sex<0）を左、男性（sex>0）を右に描く。
+// 中性（sex=0）は中央の細い灰バー。applyState のたびに再描画 = 実行中は動き続ける
+
+function drawAges() {
+  const cv = $('ages');
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!state || state.humans.length === 0) return;
+
+  const BIN = 5;
+  const MAX_AGE = 85; // 最上段は 80+
+  const nBins = MAX_AGE / BIN;
+  const f = new Array(nBins).fill(0);
+  const m = new Array(nBins).fill(0);
+  const n = new Array(nBins).fill(0);
+  for (const h of state.humans) {
+    const b = Math.min(nBins - 1, Math.floor(h.ageMonths / 12 / BIN));
+    if (h.sex < 0) f[b]++;
+    else if (h.sex > 0) m[b]++;
+    else n[b]++;
+  }
+  const maxSide = Math.max(1, ...f.map((v, i) => v + n[i] / 2), ...m.map((v, i) => v + n[i] / 2));
+
+  const cx = cv.width / 2;
+  const top = 6;
+  const rowH = (cv.height - top - 16) / nBins;
+  const halfW = cv.width / 2 - 44;
+  const scale = halfW / maxSide;
+
+  ctx.font = '9px monospace';
+  for (let b = 0; b < nBins; b++) {
+    // 若い世代を下、高齢を上に（人口ピラミッドの慣習）
+    const y = top + (nBins - 1 - b) * rowH;
+    const h2 = Math.max(1, rowH - 2);
+    if (f[b] > 0) {
+      ctx.fillStyle = '#f06292';
+      ctx.fillRect(cx - f[b] * scale, y, f[b] * scale, h2);
+    }
+    if (m[b] > 0) {
+      ctx.fillStyle = '#4fc3f7';
+      ctx.fillRect(cx, y, m[b] * scale, h2);
+    }
+    if (n[b] > 0) {
+      ctx.fillStyle = '#90a4ae';
+      const w = Math.max(2, n[b] * scale * 0.5);
+      ctx.fillRect(cx - w / 2, y, w, h2);
+    }
+    // 数値（バーの外側）
+    ctx.fillStyle = '#7c8494';
+    ctx.textAlign = 'right';
+    if (f[b] > 0) ctx.fillText(String(f[b]), cx - f[b] * scale - 3, y + h2 - 1);
+    ctx.textAlign = 'left';
+    if (m[b] > 0) ctx.fillText(String(m[b]), cx + m[b] * scale + 3, y + h2 - 1);
+    // 年齢ラベル（20 歳ごと）
+    if ((b * BIN) % 20 === 0) {
+      ctx.fillStyle = '#5c6370';
+      ctx.textAlign = 'right';
+      ctx.fillText(String(b * BIN), cv.width - 2, y + h2 - 1);
+    }
+  }
+  // 中央軸
+  ctx.strokeStyle = '#2c313c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, top);
+  ctx.lineTo(cx, cv.height - 14);
+  ctx.stroke();
 }
 
 // --- 描画: 環境 / 板 / インスペクタ ---------------------------------------------
