@@ -66,10 +66,12 @@ let hitboxes = []; // {x, y, r, id}
 
 // --- worker RPC ---------------------------------------------------------------
 
-// app.js ↔ worker.js のプロトコル版。init の引数や応答の形を変えたら上げる。
-// worker URL のクエリに付けて、HTTP キャッシュ由来の新旧取り違え
-// （新 app + 旧 worker）でプロトコルがずれるのを防ぐ
-const PROTOCOL_VERSION = 2;
+// app.js ↔ worker.js ↔ engine/component のプロトコル版。
+// **init の引数・応答の形、engine の API、component の ABI を変えたら必ず上げる**。
+// worker URL のクエリに付き、worker はこの値を自分の配下資産（runtime.js /
+// engine / component）の URL にも伝搬させるので、ここを 1 つ上げれば
+// HTTP キャッシュ由来の新旧取り違え（旧 worker や旧 engine の混在）が全部防げる
+const PROTOCOL_VERSION = 3;
 
 function newWorker() {
   if (worker) worker.terminate();
