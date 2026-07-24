@@ -80,11 +80,9 @@ fn main() {
                 .iter()
                 .map(|&a| w.intimacy_of(from, a) as u128)
                 .sum();
-            if total == 0 {
-                0
-            } else {
-                (w.intimacy_of(from, to) as u128 * 1000 / total) as u64
-            }
+            (w.intimacy_of(from, to) as u128 * 1000)
+                .checked_div(total)
+                .unwrap_or(0) as u64
         };
 
         let mut gens = [0usize; 4];
