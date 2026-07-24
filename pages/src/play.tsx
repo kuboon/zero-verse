@@ -131,6 +131,13 @@ function Play() {
             <div class="legend" id="chartLegend"></div>
           </section>
           <section class="panel">
+            <h2>年齢分布（生存者）</h2>
+            <canvas id="ages" width="560" height="190"></canvas>
+            <div class="legend">
+              ← 女性（sex&lt;0）　男性（sex&gt;0）→　中央灰 = 中性　5 歳刻み
+            </div>
+          </section>
+          <section class="panel">
             <h2>
               環境ストック <span class="dim">(全知ビュー)</span>
             </h2>
