@@ -16,6 +16,7 @@ let owed = 0; // 消化していない月数
 let lastT = 0;
 let selected = null; // 選択中 human id
 let viewMode = 'world'; // 'world' | 'tree'
+let agesAxisMax = 0; // 年齢分布の横軸最大（1-2-5 に量子化して安定させる）
 let groupNames = null; // 自由編成: グループ番号 → brain 名（役割表示に使う）
 // 自由編成の行（brain × 人数）
 const CUSTOM_BRAINS = [
@@ -179,6 +180,7 @@ function syncScenarioControls() {
 async function init() {
   running = false;
   series = [];
+  agesAxisMax = 0;
   seats.clear();
   roleColorMap.clear();
   selected = null;
@@ -621,12 +623,23 @@ function drawAges() {
     else n[b]++;
   }
   const maxSide = Math.max(1, ...f.map((v, i) => v + n[i] / 2), ...m.map((v, i) => v + n[i] / 2));
+  // 横軸の安定化: 必要幅を 1-2-5 系列に切り上げた値を軸最大にする。
+  // 生の最大値で毎フレーム正規化するとバー幅が伸び縮みし続けて読めない。
+  // 拡大は即時、縮小は必要幅が軸の 4 割を切ったときだけ（ヒステリシス）
+  const nice = (v) => {
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const s of [1, 2, 5, 10]) if (v <= s * p) return s * p;
+    return 10 * p;
+  };
+  if (maxSide > agesAxisMax || maxSide < agesAxisMax * 0.4) {
+    agesAxisMax = nice(maxSide);
+  }
 
   const cx = cv.width / 2;
   const top = 6;
   const rowH = (cv.height - top - 16) / nBins;
   const halfW = cv.width / 2 - 44;
-  const scale = halfW / maxSide;
+  const scale = halfW / agesAxisMax;
 
   ctx.font = '9px monospace';
   for (let b = 0; b < nBins; b++) {
@@ -838,6 +851,9 @@ init();
 window.zv = {
   get state() {
     return state;
+  },
+  get agesAxisMax() {
+    return agesAxisMax;
   },
   select(id) {
     selected = id;
