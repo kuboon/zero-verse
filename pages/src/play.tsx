@@ -32,7 +32,25 @@ function Play() {
             <a href={routes.home.href()}>zeroverse</a>{" "}
             <span class="sub">play</span>
           </h1>
-          <div class="controls">
+          <div class="controls" id="runControls">
+            <button type="button" id="backToSetup">⚙ 編成に戻る</button>
+            <button type="button" id="play" disabled>▶ 実行</button>
+            <button type="button" id="step1" disabled>+1月</button>
+            <button type="button" id="step12" disabled>+1年</button>
+            <label class="speed">
+              速度 <input id="speed" type="range" min="0" max="6" value="3" />
+              <span id="speedLabel">12 月/秒</span>
+            </label>
+            <button type="button" id="judge" disabled>⚖ 判定</button>
+            <span id="clock">—</span>
+          </div>
+        </header>
+
+        <div id="banner" class="hidden"></div>
+
+        <div id="setup">
+          <section class="setup-card">
+            <h2>世界の編成</h2>
             <label>
               シナリオ
               <select id="campaign">
@@ -69,10 +87,10 @@ function Play() {
                 <option value="idle">idle（何もしない）</option>
               </select>
             </label>
-            <span id="brainRows" class="brain-rows hidden"></span>
-            <button type="button" id="addBrainRow" class="hidden">
-              ＋追加
-            </button>
+            <div id="brainRowsWrap" class="hidden">
+              <span id="brainRows" class="brain-rows"></span>
+              <button type="button" id="addBrainRow">＋追加</button>
+            </div>
             <label id="scaleWrap" class="hidden">
               規模 ×<input
                 id="scale"
@@ -86,20 +104,15 @@ function Play() {
             <label>
               seed <input id="seed" type="number" value="42" min="0" step="1" />
             </label>
-            <button type="button" id="reset">⟳ 生成</button>
-            <button type="button" id="play" disabled>▶ 実行</button>
-            <button type="button" id="step1" disabled>+1月</button>
-            <button type="button" id="step12" disabled>+1年</button>
-            <label class="speed">
-              速度 <input id="speed" type="range" min="0" max="6" value="3" />
-              <span id="speedLabel">12 月/秒</span>
-            </label>
-            <button type="button" id="judge" disabled>⚖ 判定</button>
-            <span id="clock">—</span>
-          </div>
-        </header>
-
-        <div id="banner" class="hidden"></div>
+            <button type="button" id="start" class="primary">
+              ▶ この世界をはじめる
+            </button>
+            <p class="dim">
+              実行画面の「⚙
+              編成に戻る」でいつでもここに戻れます（実行は停止します）
+            </p>
+          </section>
+        </div>
 
         <main>
           <section class="world">
