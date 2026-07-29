@@ -8,10 +8,25 @@ import { readFile } from 'node:fs/promises';
 import {
   loadEngine,
   loadComponent,
+  loadComponentFromFiles,
   makeBrainRunner,
   makeScenario,
   createRun,
 } from '../pages/static/play/runtime.js';
+
+// ブラウザ内 transpile バンドル（gen/jco/）は fetch で core wasm を取りに行く。
+// node の fetch は file: を扱えないので、ここでだけポリフィルする
+{
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url, ...rest) => {
+    const u = String(url);
+    if (u.startsWith('file:')) {
+      const bytes = await readFile(new URL(u));
+      return new Response(bytes, { headers: { 'content-type': 'application/wasm' } });
+    }
+    return origFetch(url, ...rest);
+  };
+}
 
 const gen = new URL('../pages/static/play/gen/', import.meta.url);
 // node の fetch は file: を扱えないので readFile で差し替える
@@ -93,5 +108,26 @@ for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage'])
     process.exit(1);
   }
   console.log(`freeRun: alive=${w.alive()} groups=${rep.groups.length}`);
+}
+// brain アップロード経路: bytes → ブラウザ内 jco transpile → files 接続。
+// 同じ component をビルトイン読み込みした場合と同一歴史になること
+{
+  const { transpileComponent } = await import('../pages/static/play/gen/jco/transpiler.js');
+  const bytes = await readFile(new URL('../target/components/brain-forager.wasm', import.meta.url));
+  const out = await transpileComponent(new Uint8Array(bytes), 'ubrain');
+  const uploaded = makeBrainRunner(await loadComponentFromFiles(out.files, 'ubrain'));
+  const runHash = (runner) => {
+    const w = engine.WebWorld.freeRun(11n, Uint32Array.from([5]));
+    w.setDecider((id, snap, mem) => runner.decide(snap, mem));
+    w.step(20 * 12);
+    return w.state().stateHash;
+  };
+  const h1 = runHash(brain);
+  const h2 = runHash(uploaded);
+  if (h1 !== h2) {
+    console.error(`FAIL: upload path history differs (${h1} != ${h2})`);
+    process.exit(1);
+  }
+  console.log(`upload path: ok (transpile in browser bundle → same history ${h2})`);
 }
 console.log('smoke ok');

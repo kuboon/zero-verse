@@ -69,6 +69,30 @@ export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes
   return { instantiate: (imports) => mod.instantiate(getCoreModule, imports) };
 }
 
+/**
+ * jco generate() が返した files（[name, bytes] の列）から component をロードする。
+ * ブラウザ内 transpile（brain アップロード）用の loadComponent の in-memory 版。
+ * 生成 JS は data: URL で import する（blob: URL は node が import できないため、
+ * ブラウザ/node 共通のこの形にする。glue は ASCII なので膨張しない）
+ */
+export async function loadComponentFromFiles(files, name) {
+  const map = new Map(files);
+  const modules = new Map();
+  for (const [file, bytes] of map) {
+    if (file.endsWith('.wasm')) modules.set(file, await WebAssembly.compile(bytes));
+  }
+  const jsBytes = map.get(`${name}.js`);
+  if (!jsBytes) throw new Error(`transpile 出力に ${name}.js がありません`);
+  const js = new TextDecoder().decode(jsBytes);
+  const mod = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(js)}`);
+  const getCoreModule = (path) => {
+    const m = modules.get(path);
+    if (!m) throw new Error(`core module not found: ${path}`);
+    return m;
+  };
+  return { instantiate: (imports) => mod.instantiate(getCoreModule, imports) };
+}
+
 // --- jco lift 表現の正規化（engine 側 serde が読める形へ） ---------------------
 
 function normalizeAct(a) {
