@@ -110,8 +110,9 @@ function onHang() {
   if (worker) worker.terminate();
   worker = null;
   setControls({ loaded: false });
+  setMode('setup');
   banner(
-    'brain が応答しません（無限ループの疑い）。fuel 計量の無いブラウザでは思考は打ち切られません。⟳ 生成 でやり直してください。',
+    'brain が応答しません（無限ループの疑い）。fuel 計量の無いブラウザでは思考は打ち切られません。編成からやり直してください。',
     'err',
   );
 }
@@ -147,7 +148,10 @@ function applyState(s, extra = []) {
   if (state.alive === 0 && running) {
     running = false;
     setControls({ loaded: true });
-    banner('全滅しました。⚖ 判定 で結果を確認するか、⟳ 生成 でやり直してください。', 'err');
+    banner(
+      '全滅しました。判定/集計で結果を確認するか、⚙ 編成に戻る からやり直してください。',
+      'err',
+    );
   }
   draw();
   drawChart();
@@ -167,14 +171,24 @@ function syncScenarioControls() {
   const v = $('campaign').value;
   const isExp = v.startsWith('exp-');
   const isCustom = v === 'custom';
-  // 実験再現は brain 内蔵、自由編成は行エディタで指定するので brain 選択は無効
+  // 実験再現は brain 内蔵、自由編成は行エディタで指定するので brain 選択は隠す
   $('brain').disabled = isExp || isCustom;
-  $('brainLabel').classList.toggle('hidden', isCustom);
-  $('brainRows').classList.toggle('hidden', !isCustom);
-  $('addBrainRow').classList.toggle('hidden', !isCustom);
+  $('brainLabel').classList.toggle('hidden', isCustom || isExp);
+  $('brainRowsWrap').classList.toggle('hidden', !isCustom);
   $('scaleWrap').classList.toggle('hidden', !isExp);
   $('judge').textContent = isExp || isCustom ? '📊 集計' : '⚖ 判定';
   if (isCustom) renderBrainRows();
+}
+
+// 画面モード: 'setup'（世界の編成）⇄ 'run'（実行・観戦）。
+// 編成に戻ったら実行は必ず止める（裏で走り続けない）
+function setMode(mode) {
+  document.body.classList.toggle('setup', mode === 'setup');
+  if (mode === 'setup') {
+    running = false;
+    owed = 0;
+    setControls({ loaded: !!state });
+  }
 }
 
 async function init() {
@@ -207,8 +221,21 @@ async function init() {
     banner(null);
     applyState(r.state);
     setControls({ loaded: true });
+    return true;
   } catch (e) {
+    setMode('setup');
     banner(`ロード失敗: ${e.message}`, 'err');
+    return false;
+  }
+}
+
+// 編成画面の「はじめる」: 世界の生成と実行開始を 1 ステップにする
+async function start() {
+  setMode('run');
+  if (await init()) {
+    running = true;
+    owed = 0;
+    setControls({ loaded: true });
   }
 }
 
@@ -791,7 +818,11 @@ function drawInspector() {
 
 // --- イベント配線 ---------------------------------------------------------------
 
-$('reset').addEventListener('click', init);
+$('start').addEventListener('click', start);
+$('backToSetup').addEventListener('click', () => {
+  setMode('setup');
+  banner(null);
+});
 $('campaign').addEventListener('change', syncScenarioControls);
 $('addBrainRow').addEventListener('click', () => {
   brainRows.push({ brain: 'forager', count: 10 });
@@ -845,7 +876,8 @@ document.body.addEventListener('click', (e) => {
 
 $('speedLabel').textContent = `${SPEEDS[$('speed').value]} 月/秒`;
 requestAnimationFrame(frame);
-init();
+setMode('setup');
+syncScenarioControls();
 
 // テスト用フック（UI からは使わない）
 window.zv = {

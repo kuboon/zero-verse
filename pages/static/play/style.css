@@ -47,7 +47,31 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 #banner.ok { background: #123f22; color: #81c784; border-color: #1c5c33; }
 #banner.err { background: #451717; color: #ef9a9a; border-color: #6b2424; }
-.hidden { display: none; }
+/* !important: .setup-card label 等の display 指定より常に優先させる */
+.hidden { display: none !important; }
+
+/* --- 画面モード: body.setup = 世界の編成 / それ以外 = 実行・観戦 --- */
+body.setup main, body.setup footer, body.setup #runControls { display: none; }
+body:not(.setup) #setup { display: none; }
+#setup { display: flex; justify-content: center; padding: 32px 14px; }
+.setup-card {
+  display: flex; flex-direction: column; gap: 14px;
+  width: 100%; max-width: 460px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 20px 22px;
+}
+.setup-card h2 { font-size: 15px; color: var(--fg); margin: 0; }
+.setup-card label { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+.setup-card select { flex: 1 1 auto; padding: 6px 8px; }
+.setup-card p { margin: 0; font-size: 12px; }
+#brainRowsWrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#brainRowsWrap.hidden { display: none; }
+button.primary {
+  background: #1c4d63; border-color: var(--accent); color: var(--accent);
+  font-size: 15px; padding: 10px 14px;
+}
+button.primary:hover:not(:disabled) { background: #205d78; }
+
 main { display: flex; gap: 12px; padding: 12px 14px; }
 .world { flex: 0 0 auto; }
 canvas#world { background: #0e1014; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; height: auto; }
