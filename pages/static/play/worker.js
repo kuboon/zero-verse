@@ -23,9 +23,17 @@ const V = new URL(self.location.href).searchParams.get('v');
 const earlyMessages = [];
 self.onmessage = (e) => earlyMessages.push(e);
 
-const { loadEngine, loadComponent, makeBrainRunner, makeScenario, createRun } = await import(
-  V ? `./runtime.js?v=${V}` : './runtime.js'
-);
+const { loadEngine, loadComponent, loadComponentFromFiles, makeBrainRunner, makeScenario, createRun } =
+  await import(V ? `./runtime.js?v=${V}` : './runtime.js');
+
+// アップロードされた .wasm component をブラウザ内で jco transpile して接続する。
+// transpiler バンドル（約 9MB）はアップロード行があるときだけ動的に落ちてくる
+async function loadUploadedBrain(bytes, name) {
+  const url = new URL(V ? `gen/jco/transpiler.js?v=${V}` : 'gen/jco/transpiler.js', import.meta.url);
+  const { transpileComponent } = await import(url.href);
+  const out = await transpileComponent(new Uint8Array(bytes), name);
+  return makeBrainRunner(await loadComponentFromFiles(out.files, name));
+}
 
 // ビルトインのシナリオ（campaign の dir/name は docs/viewer/gen/ に build-web.sh が置く）
 const SCENARIOS = {
@@ -81,13 +89,22 @@ async function handle(cmd, args) {
           runners.push(null);
           continue;
         }
-        const b = BRAINS[row.brain];
-        if (!b) throw new Error(`unknown brain: ${row.brain}`);
         if (!cache.has(row.brain)) {
-          cache.set(
-            row.brain,
-            makeBrainRunner(await loadComponent(new URL(b.dir, import.meta.url), b.name, undefined, V)),
-          );
+          if (row.brain.startsWith('upload:')) {
+            // アップロード brain: init 引数の uploads からバイト列を受け取り、
+            // ブラウザ内で transpile して接続する
+            const bytes = args.uploads?.[row.brain];
+            if (!bytes) throw new Error(`upload bytes missing: ${row.brain}`);
+            const name = `u${row.brain.slice('upload:'.length)}`.replace(/[^a-zA-Z0-9_]/g, '_');
+            cache.set(row.brain, await loadUploadedBrain(bytes, name));
+          } else {
+            const b = BRAINS[row.brain];
+            if (!b) throw new Error(`unknown brain: ${row.brain}`);
+            cache.set(
+              row.brain,
+              makeBrainRunner(await loadComponent(new URL(b.dir, import.meta.url), b.name, undefined, V)),
+            );
+          }
         }
         runners.push(cache.get(row.brain));
       }
@@ -100,7 +117,7 @@ async function handle(cmd, args) {
         if (!runner) return { acts: [], orders: [] };
         return runner.decide(snap, memory);
       });
-      const names = rows.map((r, i) => `${r.brain}#${i + 1}`);
+      const names = rows.map((r, i) => `${r.label ?? r.brain}#${i + 1}`);
       run = {
         world,
         judge: () => {

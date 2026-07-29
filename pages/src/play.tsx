@@ -109,7 +109,13 @@ function Play() {
             </button>
             <p class="dim">
               実行画面の「⚙
-              編成に戻る」でいつでもここに戻れます（実行は停止します）
+              編成に戻る」でいつでもここに戻れます（実行は停止します）。<br />自分の
+              brain を書くには{" "}
+              <a href={routes.docs.show.href({ slug: "brain-guide" })}>
+                brain 作者ガイド
+              </a>{" "}
+              へ。自由編成で .wasm をアップロードして対戦できます（ファイルは
+              どこにも送信されず、ブラウザ内だけで実行されます）
             </p>
           </section>
         </div>

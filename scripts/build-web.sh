@@ -9,6 +9,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 JCO_VERSION=1.25.2
+JCO_TRANSPILE_VERSION=0.4.2 # ブラウザ内 transpile（brain アップロード）用
+ESBUILD_VERSION=0.25.6
 
 # 1. guest components
 ./scripts/build-guests.sh
@@ -32,4 +34,39 @@ for comp in brain-forager scenario-m1; do
     | node -e 'const fs=require("fs");const l=fs.readFileSync(0,"utf8").trim().split("\n");fs.writeFileSync("manifest.json",JSON.stringify({cores:l}))')
 done
 
-echo "built: pages/static/play/gen/{engine,brain-forager,scenario-m1}"
+# 4. ブラウザ内 jco transpile バンドル（brain アップロード機能）。
+#    ユーザーの .wasm component をブラウザだけで接続するため、jco の
+#    transpile 本体（js-component-bindgen、wasm）を esbuild で 1 ファイルに束ねる。
+#    アップロード時のみ動的 import されるので通常の閲覧では落ちてこない
+TDIR=$(mktemp -d)
+trap 'rm -rf "$TDIR"' EXIT
+npm install --prefix "$TDIR" --silent --no-audit --no-fund \
+  "@bytecodealliance/jco-transpile@$JCO_TRANSPILE_VERSION" "esbuild@$ESBUILD_VERSION"
+cat > "$TDIR/entry.js" <<'EOF'
+// zeroverse: ブラウザ内 jco transpile（brain アップロード用）の薄い入口
+import {
+  $init,
+  generate,
+} from './node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js';
+
+/** wasm component bytes → { files: Array<[name, Uint8Array]> }（instantiation: sync） */
+export async function transpileComponent(bytes, name) {
+  await $init;
+  return generate(bytes, {
+    name,
+    noTypescript: true,
+    noNamespacedExports: true,
+    instantiation: { tag: 'sync' },
+  });
+}
+EOF
+mkdir -p pages/static/play/gen/jco
+# node:fs/promises は vendor 内の node 用フォールバック（ブラウザでは到達しない）
+"$TDIR/node_modules/.bin/esbuild" "$TDIR/entry.js" --bundle --format=esm \
+  --platform=browser --external:node:fs/promises \
+  --outfile=pages/static/play/gen/jco/transpiler.js >/dev/null
+cp "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.core.wasm" \
+   "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.core2.wasm" \
+   pages/static/play/gen/jco/
+
+echo "built: pages/static/play/gen/{engine,brain-forager,scenario-m1,jco}"

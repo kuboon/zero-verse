@@ -24,6 +24,32 @@ const CUSTOM_BRAINS = [
   ['idle', 'idle'],
 ];
 let brainRows = [{ brain: 'forager', count: 10 }];
+// アップロードされた brain（.wasm component）。key 'upload:<n>' → {name, bytes}。
+// ページを開いている間だけ保持する（リロードで消える）
+const uploadedBrains = new Map();
+let uploadSeq = 0;
+
+/** .wasm を選ばせて uploadedBrains に登録し、row に割り当てる */
+function pickUploadFor(row) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.wasm';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) {
+      renderBrainRows();
+      return;
+    }
+    const key = `upload:${++uploadSeq}`;
+    uploadedBrains.set(key, {
+      name: file.name.replace(/\.wasm$/, ''),
+      bytes: await file.arrayBuffer(),
+    });
+    row.brain = key;
+    renderBrainRows();
+  });
+  input.click();
+}
 
 function renderBrainRows() {
   const box = $('brainRows');
@@ -32,7 +58,12 @@ function renderBrainRows() {
     const span = document.createElement('span');
     span.className = 'brow';
     const sel = document.createElement('select');
-    for (const [v, label] of CUSTOM_BRAINS) {
+    const options = [
+      ...CUSTOM_BRAINS,
+      ...[...uploadedBrains].map(([k, u]) => [k, `📦 ${u.name}`]),
+      ['__upload__', '📂 .wasm をアップロード…'],
+    ];
+    for (const [v, label] of options) {
       const o = document.createElement('option');
       o.value = v;
       o.textContent = label;
@@ -40,6 +71,10 @@ function renderBrainRows() {
       sel.appendChild(o);
     }
     sel.addEventListener('change', () => {
+      if (sel.value === '__upload__') {
+        pickUploadFor(row);
+        return;
+      }
       row.brain = sel.value;
     });
     const num = document.createElement('input');
@@ -72,7 +107,7 @@ let hitboxes = []; // {x, y, r, id}
 // worker URL のクエリに付き、worker はこの値を自分の配下資産（runtime.js /
 // engine / component）の URL にも伝搬させるので、ここを 1 つ上げれば
 // HTTP キャッシュ由来の新旧取り違え（旧 worker や旧 engine の混在）が全部防げる
-const PROTOCOL_VERSION = 4;
+const PROTOCOL_VERSION = 5;
 
 function newWorker() {
   if (worker) worker.terminate();
@@ -206,6 +241,15 @@ async function init() {
   try {
     const seed = Math.max(0, Math.floor(Number($('seed').value) || 0));
     const scale = Math.max(1, Math.min(10, Number($('scale').value) | 0 || 1));
+    // アップロード brain のバイト列は行が参照しているものだけ渡す
+    const uploads = {};
+    for (const row of brainRows) {
+      if (row.brain.startsWith('upload:')) {
+        const u = uploadedBrains.get(row.brain);
+        if (!u) throw new Error('アップロードされた brain が見つかりません');
+        uploads[row.brain] = u.bytes;
+      }
+    }
     const r = await rpc(
       'init',
       {
@@ -213,7 +257,12 @@ async function init() {
         scenario: $('campaign').value,
         brain: $('brain').value,
         scale,
-        comp: brainRows.map((row) => ({ brain: row.brain, count: row.count })),
+        comp: brainRows.map((row) => ({
+          brain: row.brain,
+          count: row.count,
+          label: uploadedBrains.get(row.brain)?.name,
+        })),
+        uploads,
       },
       60000,
     );

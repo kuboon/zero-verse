@@ -64,6 +64,7 @@ body:not(.setup) #setup { display: none; }
 .setup-card label { display: flex; align-items: center; gap: 8px; color: var(--dim); }
 .setup-card select { flex: 1 1 auto; padding: 6px 8px; }
 .setup-card p { margin: 0; font-size: 12px; }
+.setup-card a { color: var(--accent); }
 #brainRowsWrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 #brainRowsWrap.hidden { display: none; }
 button.primary {
