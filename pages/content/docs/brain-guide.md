@@ -31,7 +31,9 @@ decide(snapshot, memory) を呼ばれたら、
 
 ## 最小の brain（Rust）
 
-リポジトリの [`guests/`](https://github.com/kuboon/zero-verse/tree/main/guests) が実例。`guests/brain-forager` は「何が食事で何が採取かを知らずに生まれ、invoke 実験の結果から法則を学ぶ」参照実装で、まずこれを読むのが早い。
+**いちばん早いのはテンプレートから始めること**: [zeroverse-brain-template](https://github.com/kuboon/zeroverse-brain-template) を「Use this template」して `./build.sh` すれば、そのまま生き延びられる brain（forager と同じ実験学習戦略）の `.wasm` ができる。wit のコピー・ビルドスクリプト・CI（push すると artifact に `.wasm` が置かれるので、手元に Rust が無くても開発できる）込み。
+
+本体リポジトリの [`guests/`](https://github.com/kuboon/zero-verse/tree/main/guests) も実例。`guests/brain-forager` は「何が食事で何が採取かを知らずに生まれ、invoke 実験の結果から法則を学ぶ」参照実装で、まずこれを読むのが早い。
 
 骨格は次のとおり:
 
