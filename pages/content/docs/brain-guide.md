@@ -75,7 +75,7 @@ Rust 以外でも、`wit/world.wit` の `brain` world を実装した wasm compo
 
 ### ブラウザ（いちばん手軽）
 
-[play](/play) → シナリオ「自由編成」→ brain の行で **「📂 .wasm をアップロード…」** を選ぶ。
+[play ページ](https://kuboon.github.io/zero-verse/play/) → シナリオ「自由編成」→ brain の行で **「📂 .wasm をアップロード…」** を選ぶ。
 
 - `.wasm` は**どこにも送信されない**。ブラウザの中で jco が component を transpile し、そのままページ内で実行される（GitHub Pages に動的サーバは無い）
 - 複数行に別々の brain を人数付きで並べて対戦できる。📊 集計 でグループごとの生存数・平均生涯消費が出る
