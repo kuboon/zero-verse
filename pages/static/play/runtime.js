@@ -8,7 +8,8 @@
 //   - decide ごとの新規インスタンス化（テレパシー禁止。wasm-host と同じ不変則）
 //   - jco の lift 表現（BigUint64Array / Uint32Array / undefined val）の正規化
 //
-// 制約: fuel 計量は無い（fuel_used = 0 として engine 側に渡る）。トラップ時は
+// fuel: 計装済み core wasm（crates/meter）が import global zv.fuel を減算する。
+// decide 前に予算をセットし、後に残量から fuel_used を得る。予算切れ・トラップ時は
 // そこまでに push 済みの宣言を有効とする（部分実行、wasm-host と同じ）。
 
 /** url のバイト列を取得する。node では fetch が file: を扱えないため差し替え可能 */
@@ -66,7 +67,32 @@ export async function loadComponent(dirUrl, name, fetchBytes = defaultFetchBytes
     if (!m) throw new Error(`core module not found: ${path}`);
     return m;
   };
-  return { instantiate: (imports) => mod.instantiate(getCoreModule, imports) };
+  return withFuel(mod, getCoreModule);
+}
+
+/**
+ * component のロード結果を fuel 注入つきで包む。
+ * 計装済み core wasm（crates/meter）は mutable i64 global `zv.fuel` を import し、
+ * 命令数ぶん減算して負になったら trap する。ここで作る Global をすべての
+ * core instantiate に注入し（未計装モジュールは単に参照しない）、
+ * decide 前後の set/read で fuel_used を得る（makeBrainRunner）
+ */
+function withFuel(mod, getCoreModule) {
+  const fuel = new WebAssembly.Global({ value: 'i64', mutable: true }, 0n);
+  const instantiateCore = (module, importObject) =>
+    new WebAssembly.Instance(module, { ...importObject, zv: { fuel } });
+  return {
+    instantiate: (imports) => mod.instantiate(getCoreModule, imports, instantiateCore),
+    fuel,
+  };
+}
+
+/** wasm-bindgen 生成の fuel 計装モジュール（gen/meter/）をロードする */
+export async function loadMeter(dirUrl, fetchBytes = defaultFetchBytes, bust) {
+  const mod = await import(busted(new URL('zeroverse_meter.js', dirUrl).href, bust));
+  const bytes = await fetchBytes(busted(new URL('zeroverse_meter_bg.wasm', dirUrl).href, bust));
+  await mod.default({ module_or_path: await WebAssembly.compile(bytes) });
+  return mod;
 }
 
 /**
@@ -90,7 +116,7 @@ export async function loadComponentFromFiles(files, name) {
     if (!m) throw new Error(`core module not found: ${path}`);
     return m;
   };
-  return { instantiate: (imports) => mod.instantiate(getCoreModule, imports) };
+  return withFuel(mod, getCoreModule);
 }
 
 // --- jco lift 表現の正規化（engine 側 serde が読める形へ） ---------------------
@@ -167,11 +193,20 @@ export function makeBrainRunner(component) {
         imports[`zeroverse:world/${iface}`] = impl;
         imports[`zeroverse:world/${iface}@0.1.0`] = impl;
       }
+      // 思考予算をセットして decide。計装済み brain は実行しながら減算し、
+      // 使い切ると trap（= 部分実行）。未計装なら global は動かず fuel_used = 0
+      const budget = BigInt(snap.selfView?.fuelBudget ?? 0);
+      if (component.fuel) component.fuel.value = budget;
       try {
         const root = component.instantiate(imports);
         root.brainApi.decide(snap, memory);
       } catch {
         // トラップ = 部分実行。push 済みの宣言は有効
+      }
+      if (component.fuel) {
+        const left = component.fuel.value;
+        const used = left < 0n || left > budget ? budget : budget - left;
+        commits.fuelUsed = Number(used);
       }
       return commits;
     },

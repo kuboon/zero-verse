@@ -24,17 +24,30 @@ wasm-bindgen --target web --out-dir pages/static/play/gen/engine --no-typescript
 # 3. component → core wasm + JS glue（jco transpile。ブラウザは component model を
 #    ネイティブ実行できないため）。--instantiation sync で decide ごとの新規
 #    インスタンス化（テレパシー禁止）を呼び出し側から行えるようにする。
+cargo build --release -p zeroverse-meter
 for comp in brain-forager scenario-m1; do
   out="pages/static/play/gen/$comp"
   rm -rf "$out"
   npx -y "@bytecodealliance/jco@$JCO_VERSION" transpile \
     "target/components/$comp.wasm" --instantiation sync -o "$out" >/dev/null
+  # brain には fuel 計装を入れる（本体 core のみ。core2 以降は glue のシム）。
+  # scenario はメタ層なので計装しない（ネイティブも固定の大予算）
+  if [[ "$comp" == brain-* ]]; then
+    ./target/release/meter-cli "$out/$comp.core.wasm" "$out/$comp.core.wasm"
+  fi
   # core wasm の一覧（ブラウザ側が事前 compile するためのマニフェスト）
   (cd "$out" && ls ./*.core*.wasm 2>/dev/null | sed 's|^\./||' \
     | node -e 'const fs=require("fs");const l=fs.readFileSync(0,"utf8").trim().split("\n");fs.writeFileSync("manifest.json",JSON.stringify({cores:l}))')
 done
 
-# 4. ブラウザ内 jco transpile バンドル（brain アップロード機能）。
+# 4. fuel 計装モジュール（wasm-bindgen）。アップロード brain をブラウザ内で
+#    計装するために使う（ビルトインは上でビルド時に計装済み）
+cargo build -p zeroverse-meter --features web --release --target wasm32-unknown-unknown
+mkdir -p pages/static/play/gen/meter
+wasm-bindgen --target web --out-dir pages/static/play/gen/meter --no-typescript \
+  target/wasm32-unknown-unknown/release/zeroverse_meter.wasm
+
+# 5. ブラウザ内 jco transpile バンドル（brain アップロード機能）。
 #    ユーザーの .wasm component をブラウザだけで接続するため、jco の
 #    transpile 本体（js-component-bindgen、wasm）を esbuild で 1 ファイルに束ねる。
 #    アップロード時のみ動的 import されるので通常の閲覧では落ちてこない
@@ -69,4 +82,4 @@ cp "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindg
    "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.core2.wasm" \
    pages/static/play/gen/jco/
 
-echo "built: pages/static/play/gen/{engine,brain-forager,scenario-m1,jco}"
+echo "built: pages/static/play/gen/{engine,brain-forager,scenario-m1,meter,jco}"
