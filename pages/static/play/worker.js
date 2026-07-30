@@ -5,8 +5,9 @@
 // - experiment: M1〜M4 実験の再現。brains は zeroverse-core のネイティブ参照実装で、
 //               engine wasm（WebExperiment）の中で動く。CLI と同一シード同一歴史
 //
-// brain は任意コードなので無限ループしうる（fuel 計量が無いため停止しない）。
-// その場合も UI は固まらず、app.js 側の watchdog が worker ごと terminate する。
+// brain は任意コードだが、core wasm への fuel 計装（crates/meter）により
+// 無限ループは予算切れ trap（部分実行）で決定論的に停止する。app.js 側の
+// watchdog は glue 側の異常に備えたバックストップ。
 //
 // プロトコル: {id, cmd, ...args} を受け、{id, ok, ...result} を返す。
 //   init  {seed, scenario, brain}      → {state, isExperiment}
@@ -23,16 +24,27 @@ const V = new URL(self.location.href).searchParams.get('v');
 const earlyMessages = [];
 self.onmessage = (e) => earlyMessages.push(e);
 
-const { loadEngine, loadComponent, loadComponentFromFiles, makeBrainRunner, makeScenario, createRun } =
-  await import(V ? `./runtime.js?v=${V}` : './runtime.js');
+const {
+  loadEngine,
+  loadComponent,
+  loadComponentFromFiles,
+  loadMeter,
+  makeBrainRunner,
+  makeScenario,
+  createRun,
+} = await import(V ? `./runtime.js?v=${V}` : './runtime.js');
 
-// アップロードされた .wasm component をブラウザ内で jco transpile して接続する。
-// transpiler バンドル（約 9MB）はアップロード行があるときだけ動的に落ちてくる
+// アップロードされた .wasm component をブラウザ内で jco transpile し、
+// fuel 計装（crates/meter）を入れて接続する。transpiler バンドル（約 9MB）は
+// アップロード行があるときだけ動的に落ちてくる
 async function loadUploadedBrain(bytes, name) {
   const url = new URL(V ? `gen/jco/transpiler.js?v=${V}` : 'gen/jco/transpiler.js', import.meta.url);
   const { transpileComponent } = await import(url.href);
   const out = await transpileComponent(new Uint8Array(bytes), name);
-  return makeBrainRunner(await loadComponentFromFiles(out.files, name));
+  // 本体 core（<name>.core.wasm）だけ計装する。core2 以降は glue のシム
+  const meter = await loadMeter(new URL('gen/meter/', import.meta.url), undefined, V);
+  const files = out.files.map(([f, b]) => (f === `${name}.core.wasm` ? [f, meter.meterFuel(b)] : [f, b]));
+  return makeBrainRunner(await loadComponentFromFiles(files, name));
 }
 
 // ビルトインのシナリオ（campaign の dir/name は docs/viewer/gen/ に build-web.sh が置く）

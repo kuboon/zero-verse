@@ -12,7 +12,9 @@
 //!   core の Decision へ変換する（introduce は idle 扱い）。
 //! - 呼び出しごとの新規インスタンス化（テレパシー禁止）は JS glue 側の責務。
 //!
-//! ブラウザ側の既知の制約: wasmtime の fuel 計量が無いため fuel_used = 0
+//! ブラウザ側の fuel: wasmtime の計量は無いが、計装済み core wasm（crates/meter）が
+//! `zv.fuel` global を減算し、runtime.js が decide 前後の差分を Decision.fuel_used
+//! として渡す。未計装の brain は 0（スケールは wasmtime と近いが同一ではない）
 //! （思考コストによる health 減少が発生しない）。同一シードでもネイティブ実行とは
 //! 歴史が一致しない。ビューワは観測用のメタ層であり、公式のランはネイティブ側。
 
@@ -398,6 +400,10 @@ struct DecisionIn {
     orders: Vec<OrderIn>,
     #[serde(default)]
     memory: Option<serde_bytes::ByteBuf>,
+    /// 計装済み brain の消費 fuel（runtime.js が decide 前後の global 差分で計測）。
+    /// 未計装なら 0
+    #[serde(default)]
+    fuel_used: u64,
 }
 
 /// wasm-host の HostState::push_act / push_order と同じ変換規則
@@ -464,8 +470,8 @@ fn to_core_decision(d: DecisionIn) -> Decision {
         acts,
         orders,
         memory: d.memory.map(|b| b.into_vec()),
-        // ブラウザには fuel 計量が無い（モジュール docコメント参照）
-        fuel_used: 0,
+        // 計装済み brain（crates/meter）は実測値、未計装は 0
+        fuel_used: d.fuel_used,
     }
 }
 

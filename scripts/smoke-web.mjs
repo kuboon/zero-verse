@@ -9,6 +9,7 @@ import {
   loadEngine,
   loadComponent,
   loadComponentFromFiles,
+  loadMeter,
   makeBrainRunner,
   makeScenario,
   createRun,
@@ -109,13 +110,15 @@ for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage'])
   }
   console.log(`freeRun: alive=${w.alive()} groups=${rep.groups.length}`);
 }
-// brain アップロード経路: bytes → ブラウザ内 jco transpile → files 接続。
-// 同じ component をビルトイン読み込みした場合と同一歴史になること
+// brain アップロード経路: bytes → ブラウザ内 jco transpile → fuel 計装 → files 接続。
+// ビルトイン（ビルド時計装）と同一歴史になること
 {
   const { transpileComponent } = await import('../pages/static/play/gen/jco/transpiler.js');
+  const meter = await loadMeter(new URL('meter/', gen), fetchBytes);
   const bytes = await readFile(new URL('../target/components/brain-forager.wasm', import.meta.url));
   const out = await transpileComponent(new Uint8Array(bytes), 'ubrain');
-  const uploaded = makeBrainRunner(await loadComponentFromFiles(out.files, 'ubrain'));
+  const files = out.files.map(([f, b]) => (f === 'ubrain.core.wasm' ? [f, meter.meterFuel(b)] : [f, b]));
+  const uploaded = makeBrainRunner(await loadComponentFromFiles(files, 'ubrain'));
   const runHash = (runner) => {
     const w = engine.WebWorld.freeRun(11n, Uint32Array.from([5]));
     w.setDecider((id, snap, mem) => runner.decide(snap, mem));
@@ -128,6 +131,37 @@ for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage'])
     console.error(`FAIL: upload path history differs (${h1} != ${h2})`);
     process.exit(1);
   }
-  console.log(`upload path: ok (transpile in browser bundle → same history ${h2})`);
+  console.log(`upload path: ok (transpile + meter in browser path → same history ${h2})`);
+
+  // fuel 計装の検証:
+  // - 計装済み brain は fuel_used > 0 を返す
+  // - 予算を使い切ると trap で止まる（無限ループの決定論的停止と同じ機構）
+  //   trap までに push した宣言は有効（部分実行）で fuel_used = 予算全額
+  // 注: forager の消費は health 量子（fuel-per-health = 100 万）未満なので、
+  //     歴史はネイティブ同様 fuel ゼロ域のまま変わらない
+  const w = engine.WebWorld.freeRun(13n, Uint32Array.from([3]));
+  let sampled = 0n;
+  let snap0 = null;
+  w.setDecider((id, snap, mem) => {
+    if (!snap0) snap0 = snap;
+    const d = uploaded.decide(snap, mem);
+    if (d.fuelUsed) sampled = BigInt(d.fuelUsed);
+    return d;
+  });
+  w.step(12);
+  if (sampled <= 0n) {
+    console.error('FAIL: metered brain reported fuel_used = 0');
+    process.exit(1);
+  }
+  const tiny = structuredClone(snap0);
+  tiny.selfView.fuelBudget = 10n;
+  const starved = uploaded.decide(tiny, new Uint8Array());
+  if (starved.fuelUsed !== 10 || starved.acts.length !== 0) {
+    console.error(
+      `FAIL: budget exhaustion not enforced (fuelUsed=${starved.fuelUsed} acts=${starved.acts.length})`,
+    );
+    process.exit(1);
+  }
+  console.log(`fuel: ok (decide あたり ~${sampled} 消費、予算 10 では trap して全額消費)`);
 }
 console.log('smoke ok');

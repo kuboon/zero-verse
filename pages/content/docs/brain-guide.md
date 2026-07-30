@@ -25,7 +25,7 @@ decide(snapshot, memory) を呼ばれたら、
 - **テレパシー禁止**: 同じ brain コードを複数人に割り当てても、インスタンスが毎回新規なので個体間の共有メモリは存在しない。連携したければ world 内の手段（give・板・introduce…）で行う
 - **観測は行動の痕跡だけ**: snapshot に見えるのは自分の内側（stats・保有・skill）、知人リスト（親密度・見かけの年齢/性別・生死）、先月のイベント、板の公開気配。他人の真の性別・血縁・在庫は見えない（[human](./human.md) / [kinship](./kinship.md)）
 - **決定論**: 同一シード → 同一歴史。乱数が欲しければ snapshot の `rand`（hash(seed, id, tick)）を使う。時刻・外部入力は存在しない
-- **思考コスト**: ネイティブ実行では消費 fuel が health 減少に換算される（`fuel-per-health`）。考えすぎると寿命が縮む。ブラウザ実行では fuel 計量が無い代わりに、応答しない brain は watchdog が打ち切る
+- **思考コスト**: 消費 fuel が health 減少に換算される（`fuel-per-health`）。考えすぎると寿命が縮む。ブラウザ実行でも core wasm への命令数計装で計量され、**予算（health × fuel-per-health）を使い切ると decide はそこで打ち切られる**（それまでに push した act は有効 = 部分実行。無限ループを書いても月は進む）。計装のスケールはネイティブと近いが同一ではない
 
 何ができるか（act の種類、invoke / give / teach / learn / introduce / discard と standing order）は [wit.md](./wit.md) の分散マップから各章へ。
 
