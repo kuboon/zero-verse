@@ -94,6 +94,8 @@ impl World {
             dead_ledger: Vec::new(),
             last_quotes: Vec::new(),
             trade_volume: BTreeMap::new(),
+            give_volume: BTreeMap::new(),
+            cond_give_volume: BTreeMap::new(),
             paid_teach_transfers: 0,
             re_acquisitions: 0,
             intimacy: BTreeMap::new(),
@@ -334,8 +336,12 @@ impl World {
         let taught = self.resolve_teaching(teaches, learns);
         // 4c. conditional-give 判定（if-taught-me はここで月単位アトミックになる）
         self.resolve_conditional_gives(cond_gives, &taught);
-        // 4d. 板マッチング（standing orders は毎月全交換）
-        self.resolve_board(month, limit_orders);
+        // 4d. 板マッチング（standing orders は毎月全交換）。
+        // board_enabled = false の世界（時代プリセットの軸）では板が存在せず、
+        // 交換は conditional-give（OTC）だけになる → M2′ 実験
+        if self.params.board_enabled {
+            self.resolve_board(month, limit_orders);
+        }
         // 4e. リバースエンジニアリング（板での販売が skill を確率的に漏らす）
         self.resolve_reverse_engineering(month);
         // 4f. 親密度の月次減衰（公理 10。増加は相互作用時にインライン）
@@ -799,6 +805,18 @@ impl World {
                 };
                 if fire {
                     let was_teach_payment = matches!(cond, GiveCondition::IfTaughtMe(_));
+                    // 計測は実際に渡せる（在庫がある）場合のみ。apply_act が
+                    // ActionFailed になる発火を数えると give_volume との差が壊れる
+                    if let Some(&idx) = self.laws.index_of_id.get(res_pub) {
+                        let has_stock = self
+                            .humans
+                            .get(hid)
+                            .map(|h| h.inventory.get(&idx).copied().unwrap_or(0) > 0)
+                            .unwrap_or(false);
+                        if has_stock {
+                            *self.cond_give_volume.entry(idx).or_insert(0) += 1;
+                        }
+                    }
                     self.apply_act(
                         *hid,
                         Act::Give {
@@ -922,6 +940,9 @@ impl World {
                 let receiver = self.humans.get_mut(&to).unwrap();
                 *receiver.inventory.entry(idx).or_insert(0) += amt;
                 let public = self.laws.id_of_index[idx];
+                // OTC 流通の計測（板の trade_volume に対応する give 側のカウンタ。
+                // state_hash には入れない = 既存歴史を変えない観測層）
+                *self.give_volume.entry(idx).or_insert(0) += 1;
                 self.push_event(
                     to,
                     Event::ReceivedTransfer {

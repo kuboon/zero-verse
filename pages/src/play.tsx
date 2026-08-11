@@ -63,6 +63,9 @@ function Play() {
                 <optgroup label="実験再現（brain 内蔵・CLI と同一歴史）">
                   <option value="exp-m1">M1: 交易 vs 自給自足</option>
                   <option value="exp-m2">M2: 貨幣の創発</option>
+                  <option value="exp-m2-otc">
+                    M2′: 板なし世界の商人（OTC）
+                  </option>
                   <option value="exp-m3-open">
                     M3: 教育の市場（公開教師）
                   </option>

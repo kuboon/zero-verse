@@ -1,4 +1,4 @@
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/io.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/io.js
 var id = 0;
 var symbolDispose = Symbol.dispose || Symbol.for("dispose");
 var IoError = class extends Error {
@@ -164,13 +164,13 @@ var Pollable = class _Pollable {
 var pollableCreate = Pollable._create;
 delete Pollable._create;
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/config.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/config.js
 var _cwd = "/";
 function _getCwd() {
   return _cwd;
 }
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/environment.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/environment.js
 var _env = [];
 var _args = [];
 var _cwd2 = "/";
@@ -186,7 +186,7 @@ var environment = {
   }
 };
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/cli.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/cli.js
 var symbolDispose2 = Symbol.dispose ?? Symbol.for("dispose");
 var ComponentExit = class extends Error {
   exitError = true;
@@ -284,7 +284,7 @@ var terminalStdout = {
   }
 };
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/filesystem.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/filesystem.js
 var _fileData = { dir: {} };
 var timeZero = {
   seconds: 0n,
@@ -672,7 +672,7 @@ function convertFsError(e) {
   }
 }
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/preview2-shim/dist/browser/random.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/preview2-shim/dist/browser/random.js
 var MAX_BYTES = 65536;
 var insecureRandomValue1;
 var insecureRandomValue2;
@@ -701,7 +701,7 @@ var random = {
   }
 };
 
-// ../../../tmp/tmp.Q58rLUOd2t/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js
+// ../../../tmp/tmp.k7tDXRPzo5/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js
 var { getEnvironment } = environment;
 if (getEnvironment === void 0) {
   const err = new Error("unexpectedly undefined local import 'getEnvironment', was 'getEnvironment' available at instantiation?");
@@ -12725,7 +12725,7 @@ var $init = (() => {
   return promise || maybeSyncReturn;
 })();
 
-// ../../../tmp/tmp.Q58rLUOd2t/entry.js
+// ../../../tmp/tmp.k7tDXRPzo5/entry.js
 async function transpileComponent(bytes, name) {
   await $init;
   return generate(bytes, {

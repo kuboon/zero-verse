@@ -85,6 +85,12 @@ pub struct World {
     pub last_quotes: Vec<(HumanId, usize, Qty, usize, Qty)>,
     /// 約定回数の累計（内部 index → 回数。M2 の取引集中の計測用）
     pub trade_volume: BTreeMap<usize, u64>,
+    /// give の累計回数（内部 index → 回数）。板を使わない OTC 流通の計測用
+    /// （M2′）。観測層なので state_hash には含めない
+    pub give_volume: BTreeMap<usize, u64>,
+    /// うち conditional-give の発火分（= 店先の商品引き渡し）。
+    /// give_volume との差が「先払い（支払い手段としての流通）」になる
+    pub cond_give_volume: BTreeMap<usize, u64>,
     /// if-taught-me 条件で実行された支払いの累計回数（M3 の計測用）
     pub paid_teach_transfers: u64,
     /// リバースエンジニアリングによる skill 獲得の累計回数（M3 の計測用）
