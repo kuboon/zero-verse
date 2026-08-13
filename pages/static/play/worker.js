@@ -53,6 +53,7 @@ const SCENARIOS = {
   'campaign-m1': { type: 'component', dir: 'gen/scenario-m1/', name: 'scenario-m1' },
   'exp-m1': { type: 'experiment', kind: 'm1' },
   'exp-m2': { type: 'experiment', kind: 'm2' },
+  'exp-m2-otc': { type: 'experiment', kind: 'm2-otc' },
   'exp-m3-open': { type: 'experiment', kind: 'm3-open' },
   'exp-m3-secret': { type: 'experiment', kind: 'm3-secret' },
   'exp-m4': { type: 'experiment', kind: 'm4' },

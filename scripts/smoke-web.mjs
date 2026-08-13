@@ -76,7 +76,7 @@ if (!verdict.cleared) {
 }
 
 // 実験再現ラン（WebExperiment）: 集計が出ること + 決定論
-for (const kind of ['m1', 'm2', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
+for (const kind of ['m1', 'm2', 'm2-otc', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
   const a = new engine.WebExperiment(kind, 7n, 1);
   a.step(10 * 12);
   const lines = a.summary();

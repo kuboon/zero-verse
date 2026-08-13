@@ -105,6 +105,10 @@ pub struct WorldParams {
     /// 見かけの性別のノイズ幅 σ: apparent-sex = 真値 ± σ（一様、観測者ペア固定）。
     /// 時代プリセットの軸候補（服装規範が強い時代ほど小さい）
     pub apparent_sex_noise: u8,
+    /// 板（standing order の全対全マッチング）の有無。時代プリセットの軸:
+    /// false の世界では市場制度が存在せず、交換は conditional-give（OTC =
+    /// 相対の店先取引）だけになる（→ M2′ 実験、pages/content/docs/market.md）
+    pub board_enabled: bool,
 }
 
 impl Default for WorldParams {
@@ -147,6 +151,7 @@ impl Default for WorldParams {
             conceive_min_intimacy: 10 * QTY_SCALE, // = imprint_threshold
             apparent_age_beta_permille: 300,       // stats 全損なら 3 割老けて見える
             apparent_sex_noise: 3,
+            board_enabled: true,
         }
     }
 }

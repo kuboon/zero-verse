@@ -398,6 +398,278 @@ impl Brain for MarketBrain {
     }
 }
 
+// ---------------------------------------------------------------------------
+// M2′: 板なし世界の OTC 商人（貨幣は市場制度なしでも創発するか）
+//
+// 経済は M2 と同一（+2 シフト賦存 = 直接交換の二重一致なし）。ただし
+// board_enabled = false: 板もその公開気配も存在せず、交換手段は
+// conditional-give（店先の約束）と give（先払い）だけ。知人はリング（±1, ±2）。
+//
+// 取引プロトコル（解決順序「一方向 act → conditional-give 判定」を利用）:
+// - 売り手（全員・常設）: 各知人に「特産以外の primary R を 1.0 くれたら
+//   特産 1.0 を渡す」の cond-give を資源 R ごとに出す（act 枠外・毎月出し直し）
+// - 買い手（act）: 食料の供給者へ支払いを**先払い**する。同月内に売り手の
+//   cond-give が発火して食料が届く。供給者は ReceivedTransfer で学習し、
+//   見つかるまでは知人を輪番で探査する
+// - 支払い資源 = 保有最大の非食料・非特産 primary（**受け取った物の再支払い**）。
+//   貯蔵性の低い資源は減衰で流通から蒸発し、媒介は物理法則だけで
+//   最良 λ の資源へ集中する（メンガー。板の厚み feedback の代替）
+// ---------------------------------------------------------------------------
+
+/// M2′ の OTC 商人 brain。板を一切参照しない
+pub struct OtcBrain {
+    pub edible: ResourceId,
+    pub specialty: ResourceId,
+    pub eat_skill: SkillId,
+    pub harvest_skill: SkillId,
+    /// 月 0 の保有 = 取引されうる資源の初期集合（賦存された primary）。
+    /// 以後、保有に現れた資源（食事の副生成物など）も受け入れ対象に加える
+    tradables: Vec<ResourceId>,
+    /// 非食料の受領回数（resource → 回数）。「他人が何で支払ってくるか」の
+    /// 局所観測で、板の厚み feedback の OTC 版。最も受け取る資源で支払う
+    /// ことで正のフィードバックが閉じ、貨幣が一つに収束しうる
+    received_counts: Vec<(ResourceId, u64)>,
+    /// 食料をくれたことのある知人（信頼された供給者）
+    suppliers: Vec<HumanId>,
+    probe_cursor: usize,
+}
+
+impl OtcBrain {
+    pub fn new(
+        edible: ResourceId,
+        specialty: ResourceId,
+        eat_skill: SkillId,
+        harvest_skill: SkillId,
+    ) -> Self {
+        OtcBrain {
+            edible,
+            specialty,
+            eat_skill,
+            harvest_skill,
+            tradables: Vec::new(),
+            received_counts: Vec::new(),
+            suppliers: Vec::new(),
+            probe_cursor: 0,
+        }
+    }
+}
+
+impl Brain for OtcBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        use crate::brain::{Event, GiveCondition, StandingOrder};
+
+        // 取引財の学習: 保有に現れた資源はすべて受け入れ候補（貨幣候補）になる
+        for &(r, _) in &snap.resources {
+            if !self.tradables.contains(&r) {
+                self.tradables.push(r);
+            }
+        }
+        self.tradables.sort_unstable();
+
+        // 供給者学習: 食料をくれた相手を覚える（自分の支払いに応えた店）。
+        // あわせて非食料の受領統計（= 他人の支払い手段の観測）を積む
+        for ev in &snap.events {
+            if let Event::ReceivedTransfer { from, resource, .. } = ev {
+                if *resource == self.edible {
+                    if !self.suppliers.contains(from) {
+                        self.suppliers.push(*from);
+                    }
+                } else if let Some(e) = self.received_counts.iter_mut().find(|(r, _)| r == resource)
+                {
+                    e.1 += 1;
+                } else {
+                    self.received_counts.push((*resource, 1));
+                }
+            }
+        }
+
+        // 生産と食事
+        let mut acts = vec![
+            Act::Invoke {
+                inputs: vec![],
+                using_skills: vec![self.harvest_skill],
+            },
+            Act::Invoke {
+                inputs: vec![(self.edible, Qty::MAX)],
+                using_skills: vec![self.eat_skill],
+            },
+        ];
+
+        // 支払い資源の選択（優先順）:
+        // 1. **最も受け取る資源**（受領統計。みんなが受け取る物は自分も出せる —
+        //    板の厚みの局所版。正のフィードバックで一つに収束していく）
+        // 2. 保有量（受領統計が無い初期は最大在庫 = 賦存の再支払い）
+        // 3. id（決定論の tie-break。全員共通なので初期の共通シードになる）
+        let recv = |r: ResourceId| -> u64 {
+            self.received_counts
+                .iter()
+                .find(|&&(x, _)| x == r)
+                .map(|&(_, c)| c)
+                .unwrap_or(0)
+        };
+        let pay_with = snap
+            .resources
+            .iter()
+            .filter(|&&(r, a)| r != self.edible && r != self.specialty && a >= QTY_SCALE)
+            .max_by_key(|&&(r, a)| (recv(r), a, u64::MAX - r))
+            .map(|&(r, _)| r);
+
+        // 死んだ供給者を外す（死んだ店に払い続けない）
+        self.suppliers
+            .retain(|s| snap.acquaintances.iter().any(|v| v.id == *s && v.alive));
+
+        // 買い手: 供給者（いなければ生存知人を輪番で探査）へロットぶん先払いする。
+        // 相手の常設 cond-give が同月内に発火して食料が返る
+        let lot = 2 * QTY_SCALE;
+        if let Some(pay) = pay_with {
+            let alive_acq: Vec<HumanId> = snap
+                .acquaintances
+                .iter()
+                .filter(|v| v.alive)
+                .map(|v| v.id)
+                .collect();
+            if held(snap, pay) >= lot && !alive_acq.is_empty() {
+                let to = if self.suppliers.is_empty() {
+                    let id = alive_acq[self.probe_cursor % alive_acq.len()];
+                    self.probe_cursor += 1;
+                    id
+                } else {
+                    self.suppliers[snap.now as usize % self.suppliers.len()]
+                };
+                acts.push(Act::Give {
+                    to,
+                    resource: pay,
+                    amount: lot,
+                });
+            }
+        }
+
+        // 片付け: 食料・特産・支払い候補（= 事実上の貨幣在庫）以外を 1 枠で捨てる。
+        // 何を貨幣として溜めるかの選択が、そのままポートフォリオ選択になる
+        let mut keep = vec![self.edible, self.specialty];
+        if let Some(p) = pay_with {
+            keep.push(p);
+        }
+        acts.extend(discard_junk(snap, &keep, 1));
+
+        // 売り手（常設の店先）: 特産在庫が許す限り、各知人に
+        // 「特産以外の取引財 R を 1.0 くれたら特産 1.0 を渡す」を R ごとに約束する。
+        // 同じ相手への複数オファーは支払われた資源のものだけが発火する
+        let mut orders = Vec::new();
+        let accepts: Vec<ResourceId> = self
+            .tradables
+            .iter()
+            .copied()
+            .filter(|&r| r != self.specialty)
+            .collect();
+        let stock_lots = (held(snap, self.specialty) / lot) as usize;
+        for v in snap.acquaintances.iter().take(stock_lots.max(1)) {
+            if !v.alive {
+                continue;
+            }
+            for &r in &accepts {
+                orders.push(StandingOrder::ConditionalGive {
+                    to: v.id,
+                    resource: self.specialty,
+                    amount: lot,
+                    condition: GiveCondition::IfReceived {
+                        resource: r,
+                        amount: lot,
+                    },
+                });
+            }
+        }
+
+        Decision {
+            acts,
+            orders,
+            memory: None,
+            fuel_used: 0,
+        }
+    }
+}
+
+/// M2′ 実験世界: M2 と同一の賦存 + リング知人（±1, ±2）。板は無効
+pub fn build_m2_otc(seed: u64, n_humans: usize, params: WorldParams) -> M2Setup {
+    let params = WorldParams {
+        board_enabled: false,
+        ..params
+    };
+    let mut world = World::new(seed, n_humans, params);
+    let ids: Vec<HumanId> = world.humans.keys().copied().collect();
+    let mut brains: BTreeMap<HumanId, Box<dyn Brain>> = BTreeMap::new();
+
+    for (k, &hid) in ids.iter().enumerate() {
+        let specialty = k % N_PRIMARY;
+        let edible = (k + 2) % N_PRIMARY;
+        world.grant_skill(hid, N_PRIMARY + edible, STAT_MAX);
+        world.grant_skill(hid, specialty, STAT_MAX);
+        // リング知人: 供給者（+2 先）と近隣に手が届く最小の社会グラフ
+        for d in [1usize, 2] {
+            world.add_acquaintance(hid, ids[(k + d) % ids.len()]);
+        }
+        let rid = |p: usize| world.laws.id_of_index[p];
+        let sid = |s: usize| world.laws.skill_id_of_index[s];
+        brains.insert(
+            hid,
+            Box::new(OtcBrain::new(
+                rid(edible),
+                rid(specialty),
+                sid(N_PRIMARY + edible),
+                sid(specialty),
+            )),
+        );
+    }
+
+    M2Setup { world, brains }
+}
+
+/// M2′ の集計: **支払い**（give − cond-give 発火 = 先払いの流通）で
+/// M2 と同じ関与率を出す。商品の引き渡し（cond-give）は食料 5 種に
+/// 均等に散るのが正常なので、貨幣の集中は支払い側にだけ現れる
+fn m2_otc_result(world: &World) -> M2Result {
+    use crate::laws::N_RESOURCES;
+    let pay = |i: usize| -> u64 {
+        let all = world.give_volume.get(&i).copied().unwrap_or(0);
+        let cond = world.cond_give_volume.get(&i).copied().unwrap_or(0);
+        all.saturating_sub(cond)
+    };
+    let total: u64 = (0..N_RESOURCES).map(pay).sum();
+    let involvement: Vec<(u64, u64)> = (0..N_RESOURCES)
+        .map(|i| {
+            let share = (pay(i) * 1000).checked_div(total).unwrap_or(0);
+            (share, world.laws.specs[i].decay_permille)
+        })
+        .collect();
+    let top = involvement
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, &(s, _))| s)
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    let top_share = involvement[top].0;
+    let mut lambdas: Vec<u64> = involvement.iter().map(|&(_, l)| l).collect();
+    lambdas.sort_unstable();
+    let top_lambda_rank = lambdas
+        .iter()
+        .position(|&l| l == involvement[top].1)
+        .unwrap_or(N_RESOURCES);
+    M2Result {
+        involvement,
+        top,
+        top_share,
+        top_lambda_rank,
+    }
+}
+
+/// M2′ 実験: 板なしでも取引が特定 resource に集中するか
+pub fn run_m2_otc(seed: u64, years: u32, params: WorldParams) -> M2Result {
+    let mut setup = build_m2_otc(seed, 20, params);
+    let months = years * setup.world.params.months_per_year;
+    setup.world.run(months, &mut setup.brains);
+    m2_otc_result(&setup.world)
+}
+
 pub struct M2Setup {
     pub world: World,
     pub brains: BTreeMap<HumanId, Box<dyn Brain>>,
@@ -2058,6 +2330,7 @@ enum SessionKind {
         trader_ids: Vec<HumanId>,
     },
     M2,
+    M2Otc,
     M3 {
         apprentice_ids: Vec<HumanId>,
         skill_idx: usize,
@@ -2130,6 +2403,16 @@ impl ExperimentSession {
                     world: s.world,
                     brains: s.brains,
                     kind: SessionKind::M2,
+                    roles,
+                }
+            }
+            "m2-otc" => {
+                let s = build_m2_otc(seed, 20 * scale, params);
+                let roles = s.world.humans.keys().map(|&id| (id, "商人")).collect();
+                ExperimentSession {
+                    world: s.world,
+                    brains: s.brains,
+                    kind: SessionKind::M2Otc,
                     roles,
                 }
             }
@@ -2224,6 +2507,41 @@ impl ExperimentSession {
                         format!("{:.0}", r.autarky_mean),
                     ),
                     ("消費比（合格基準 > 1.0）".into(), format!("{:.3}", r.ratio)),
+                ]
+            }
+            SessionKind::M2Otc => {
+                let r = m2_otc_result(w);
+                let pays: u64 = (0..crate::laws::N_RESOURCES)
+                    .map(|i| {
+                        w.give_volume.get(&i).copied().unwrap_or(0)
+                            - w.cond_give_volume.get(&i).copied().unwrap_or(0)
+                    })
+                    .sum();
+                vec![
+                    (
+                        "媒介 resource（内部 #）".into(),
+                        format!(
+                            "#{}{}",
+                            r.top,
+                            if r.top >= N_PRIMARY {
+                                "（廃棄物）"
+                            } else {
+                                ""
+                            }
+                        ),
+                    ),
+                    (
+                        "媒介の支払い集中度".into(),
+                        format!("{}‰（板なし OTC）", r.top_share),
+                    ),
+                    (
+                        "媒介の劣化率 λ".into(),
+                        format!(
+                            "{}‰（貯蔵性の低い順位 {}）",
+                            r.involvement[r.top].1, r.top_lambda_rank
+                        ),
+                    ),
+                    ("支払い（先払い give）件数".into(), pays.to_string()),
                 ]
             }
             SessionKind::M2 => {
@@ -2367,6 +2685,28 @@ mod tests {
                 r.ratio,
                 r.trader_mean,
                 r.autarky_mean
+            );
+        }
+    }
+
+    /// M2′: 板（市場制度）なしでも、conditional-give だけの OTC 経済で
+    /// 支払いが貯蔵性最良の resource 群へ集中する。ただし板の公開情報が無いと
+    /// 収束は部分的（累計 25%+。板ありの 90%+ に対して）で、これ自体が
+    /// 「板 = 収束装置」という発見（pages/content/docs/market.md M2′）
+    #[test]
+    fn money_partially_emerges_without_board() {
+        for seed in 1..=3 {
+            let r = run_m2_otc(seed, 20, WorldParams::default());
+            assert!(
+                r.top_share > 250,
+                "seed {seed}: top payment share {}/1000 (no concentration): {:?}",
+                r.top_share,
+                r.involvement
+            );
+            assert_eq!(
+                r.top_lambda_rank, 0,
+                "seed {seed}: medium is not the most storable: {:?}",
+                r.involvement
             );
         }
     }
