@@ -107,7 +107,7 @@ let hitboxes = []; // {x, y, r, id}
 // worker URL のクエリに付き、worker はこの値を自分の配下資産（runtime.js /
 // engine / component）の URL にも伝搬させるので、ここを 1 つ上げれば
 // HTTP キャッシュ由来の新旧取り違え（旧 worker や旧 engine の混在）が全部防げる
-const PROTOCOL_VERSION = 7;
+const PROTOCOL_VERSION = 8;
 
 function newWorker() {
   if (worker) worker.terminate();
@@ -210,6 +210,7 @@ function syncScenarioControls() {
   $('brain').disabled = isExp || isCustom;
   $('brainLabel').classList.toggle('hidden', isCustom || isExp);
   $('brainRowsWrap').classList.toggle('hidden', !isCustom);
+  $('eraWrap').classList.toggle('hidden', !isCustom);
   $('scaleWrap').classList.toggle('hidden', !isExp);
   $('judge').textContent = isExp || isCustom ? '📊 集計' : '⚖ 判定';
   if (isCustom) renderBrainRows();
@@ -257,6 +258,7 @@ async function init() {
         scenario: $('campaign').value,
         brain: $('brain').value,
         scale,
+        era: $('era').value,
         comp: brainRows.map((row) => ({
           brain: row.brain,
           count: row.count,

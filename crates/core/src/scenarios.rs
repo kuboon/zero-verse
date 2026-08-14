@@ -2671,6 +2671,8 @@ impl ExperimentSession {
 
 #[cfg(test)]
 mod tests {
+    use crate::Era;
+
     use super::*;
 
     /// M1 合格基準: 交易 brain の生涯消費 ÷ 自給自足 brain の生涯消費 > 1.0 が
@@ -2687,6 +2689,52 @@ mod tests {
                 r.autarky_mean
             );
         }
+    }
+
+    /// 時代プリセット: 各時代のパラメータ束が設計どおりの向きで異なること
+    /// （軸の根拠は pages/content/docs/world.md の表）
+    #[test]
+    fn era_presets_axes_are_ordered() {
+        let hunt = WorldParams::for_era(Era::Hunting);
+        let agr = WorldParams::for_era(Era::Agrarian);
+        let ind = WorldParams::for_era(Era::Industrial);
+        let inf = WorldParams::for_era(Era::Information);
+
+        // 市場制度: 板は工業で成立する
+        assert!(!hunt.board_enabled && !agr.board_enabled);
+        assert!(ind.board_enabled && inf.board_enabled);
+        // 流動性 ε は単調増加
+        assert!(hunt.epsilon_permille < agr.epsilon_permille);
+        assert!(agr.epsilon_permille < ind.epsilon_permille);
+        assert!(ind.epsilon_permille < inf.epsilon_permille);
+        // 環境の豊かさ・寿命も時代とともに伸びる
+        assert!(hunt.initial_env_stock < agr.initial_env_stock);
+        assert!(ind.max_lifespan_months < inf.max_lifespan_months);
+        // 服装規範: 工業が最も厳格（σ 最小）、情報が最も中性的（σ 最大）
+        assert!(ind.apparent_sex_noise < hunt.apparent_sex_noise);
+        assert!(inf.apparent_sex_noise > agr.apparent_sex_noise);
+        // key の往復
+        for e in Era::ALL {
+            assert_eq!(Era::from_key(e.key()), Some(e));
+        }
+        assert_eq!(Era::from_key("bronze"), None);
+
+        // 時代パラメータの world が決定論的に走ること（狩猟 = 板なしの M1 風ラン）
+        let mut w1 = World::new(7, 6, WorldParams::for_era(Era::Hunting));
+        let mut w2 = World::new(7, 6, WorldParams::for_era(Era::Hunting));
+        let mut b1: BTreeMap<HumanId, Box<dyn Brain>> = w1
+            .humans
+            .keys()
+            .map(|&id| (id, Box::new(crate::brain::IdleBrain) as Box<dyn Brain>))
+            .collect();
+        let mut b2: BTreeMap<HumanId, Box<dyn Brain>> = w2
+            .humans
+            .keys()
+            .map(|&id| (id, Box::new(crate::brain::IdleBrain) as Box<dyn Brain>))
+            .collect();
+        w1.run(120, &mut b1);
+        w2.run(120, &mut b2);
+        assert_eq!(w1.state_hash(), w2.state_hash());
     }
 
     /// M2′: 板（市場制度）なしでも、conditional-give だけの OTC 経済で

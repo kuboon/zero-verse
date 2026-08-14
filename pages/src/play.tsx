@@ -94,6 +94,18 @@ function Play() {
               <span id="brainRows" class="brain-rows"></span>
               <button type="button" id="addBrainRow">＋追加</button>
             </div>
+            <label id="eraWrap" class="hidden">
+              時代
+              <select id="era">
+                <option value="default">基準（開発パラメータ）</option>
+                <option value="hunting">狩猟 — 市場なし・まばら・短命</option>
+                <option value="agrarian">農耕 — 村と行商（OTC）</option>
+                <option value="industrial">工業 — 板の成立・都市・学校</option>
+                <option value="information">
+                  情報 — 高流動・知識拡散・中性的な装い
+                </option>
+              </select>
+            </label>
             <label id="scaleWrap" class="hidden">
               規模 ×<input
                 id="scale"

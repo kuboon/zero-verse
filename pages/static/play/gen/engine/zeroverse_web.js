@@ -388,12 +388,15 @@ export class WebWorld {
      * 初期知人は全体のリング（k ↔ k+1）。judge は無く、report のグループ集計で観る。
      * @param {bigint} seed
      * @param {Uint32Array} counts
+     * @param {string | null} [era]
      * @returns {WebWorld}
      */
-    static freeRun(seed, counts) {
+    static freeRun(seed, counts, era) {
         const ptr0 = passArray32ToWasm0(counts, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.webworld_freeRun(seed, ptr0, len0);
+        var ptr1 = isLikeNone(era) ? 0 : passStringToWasm0(era, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.webworld_freeRun(seed, ptr0, len0, ptr1, len1);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

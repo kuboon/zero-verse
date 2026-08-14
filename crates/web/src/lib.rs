@@ -708,13 +708,21 @@ impl WebWorld {
     /// 賦存は M1 風（k 番目の human に harvest/eat の primary k%5 を 100% で付与）、
     /// 初期知人は全体のリング（k ↔ k+1）。judge は無く、report のグループ集計で観る。
     #[wasm_bindgen(js_name = freeRun)]
-    pub fn free_run(seed: u64, counts: Vec<u32>) -> Result<WebWorld, JsValue> {
+    pub fn free_run(seed: u64, counts: Vec<u32>, era: Option<String>) -> Result<WebWorld, JsValue> {
         console_error_panic_hook::set_once();
         let n: usize = counts.iter().map(|&c| c as usize).sum();
         if n == 0 {
             return Err(JsValue::from_str("total human count is zero"));
         }
-        let world = World::new(seed, n, WorldParams::default());
+        // 時代プリセット: 省略・"default" は開発基準値
+        let params = match era.as_deref() {
+            None | Some("") | Some("default") => WorldParams::default(),
+            Some(key) => match zeroverse_core::Era::from_key(key) {
+                Some(e) => WorldParams::for_era(e),
+                None => return Err(JsValue::from_str(&format!("unknown era: {key}"))),
+            },
+        };
+        let world = World::new(seed, n, params);
         let ids: Vec<HumanId> = world.humans.keys().copied().collect();
         let mut w = WebWorld {
             world,
