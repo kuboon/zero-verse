@@ -155,3 +155,99 @@ impl Default for WorldParams {
         }
     }
 }
+
+/// 時代プリセット（pages/content/docs/ideas.md / world.md）。
+/// 時代を分けるのは world のルールではなく**初期条件（パラメータの束）だけ**。
+/// M1〜M4 の実験は従来どおり `WorldParams::default()`（開発基準値）で走り、
+/// 時代はビューワの自由編成などが `WorldParams::for_era` で選ぶ。
+///
+/// 「初期 brain の共通知識の接種」（未決 #8 の残り半分）はここに含まれない:
+/// memory blob の形式は brain 私有なので、接種フォーマットは brain ABI 側の
+/// 課題として未決のまま（ideas.md）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Era {
+    /// 狩猟: 市場制度なし（OTC のみ）・まばらな人口（ε 低）・短命・
+    /// 薄い環境・裸に近い服装（apparent-sex は素直 = σ 小）
+    Hunting,
+    /// 農耕: 定住と村（ε 標準）・行商の OTC 経済・織物の服装規範（σ 中）
+    Agrarian,
+    /// 工業: 板（市場制度）の成立・都市の人口密度（ε 高）・学校教育・
+    /// 厳格な服装規範（σ 最小）・豊かな環境と長寿
+    Industrial,
+    /// 情報: 高流動性（ε 最高）・知識の高速拡散（RE 高・教育高速）・
+    /// 中性的な装い（σ 大）・最も豊かな環境と長寿
+    Information,
+}
+
+impl Era {
+    pub const ALL: [Era; 4] = [
+        Era::Hunting,
+        Era::Agrarian,
+        Era::Industrial,
+        Era::Information,
+    ];
+
+    /// ビューワ/CLI との受け渡し用の識別子
+    pub fn key(self) -> &'static str {
+        match self {
+            Era::Hunting => "hunting",
+            Era::Agrarian => "agrarian",
+            Era::Industrial => "industrial",
+            Era::Information => "information",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Era> {
+        Era::ALL.into_iter().find(|e| e.key() == key)
+    }
+}
+
+impl WorldParams {
+    /// 時代プリセット: 開発基準値（default）への上書きとして表現する。
+    /// 軸の根拠は pages/content/docs/world.md の表を正とする
+    pub fn for_era(era: Era) -> WorldParams {
+        let d = WorldParams::default();
+        match era {
+            Era::Hunting => WorldParams {
+                board_enabled: false,  // 市場制度は未発明（M2′ の世界）
+                epsilon_permille: 5,   // まばらなバンド社会
+                apparent_sex_noise: 2, // 服装が少なく身体がそのまま見える
+                max_lifespan_months: 60 * 12,
+                initial_env_stock: 800 * QTY_SCALE,
+                phi_per_month: 400 * QTY_SCALE,
+                ..d
+            },
+            Era::Agrarian => WorldParams {
+                board_enabled: false, // 交換は行商・店先（OTC）まで
+                epsilon_permille: 10,
+                apparent_sex_noise: 3,
+                max_lifespan_months: 70 * 12,
+                initial_env_stock: 1_500 * QTY_SCALE,
+                phi_per_month: 600 * QTY_SCALE,
+                ..d
+            },
+            Era::Industrial => WorldParams {
+                board_enabled: true,   // 市場制度の成立
+                epsilon_permille: 20,  // 都市の人口密度
+                apparent_sex_noise: 1, // 服装規範が最も厳格（性別で服装が固定）
+                max_lifespan_months: 80 * 12,
+                initial_env_stock: 2_500 * QTY_SCALE,
+                phi_per_month: 1_000 * QTY_SCALE,
+                teach_progress_needed: 240, // 学校教育
+                re_permille: 10,
+                ..d
+            },
+            Era::Information => WorldParams {
+                board_enabled: true,
+                epsilon_permille: 40,  // ネットワーク越しの高流動性
+                apparent_sex_noise: 5, // 中性的な装い（見かけから性別が判りにくい）
+                max_lifespan_months: 90 * 12,
+                initial_env_stock: 4_000 * QTY_SCALE,
+                phi_per_month: 1_600 * QTY_SCALE,
+                teach_progress_needed: 120, // オンライン教育
+                re_permille: 50,            // 知識の高速拡散
+                ..d
+            },
+        }
+    }
+}

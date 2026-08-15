@@ -109,6 +109,31 @@ for (const kind of ['m1', 'm2', 'm2-otc', 'm3-open', 'm4', 'm4-clans-exo', 'm4-m
     process.exit(1);
   }
   console.log(`freeRun: alive=${w.alive()} groups=${rep.groups.length}`);
+
+  // 時代プリセット: era 指定が効いて（別歴史になる）、かつ決定論的であること
+  const hunt1 = engine.WebWorld.freeRun(11n, Uint32Array.from([3, 2]), 'hunting');
+  const hunt2 = engine.WebWorld.freeRun(11n, Uint32Array.from([3, 2]), 'hunting');
+  hunt1.step(24);
+  hunt2.step(24);
+  if (hunt1.state().stateHash !== hunt2.state().stateHash) {
+    console.error('FAIL: era freeRun not deterministic');
+    process.exit(1);
+  }
+  if (hunt1.state().stateHash === w.state().stateHash) {
+    console.error('FAIL: era has no effect on freeRun');
+    process.exit(1);
+  }
+  let eraErr = null;
+  try {
+    engine.WebWorld.freeRun(11n, Uint32Array.from([1]), 'bronze');
+  } catch (e) {
+    eraErr = e;
+  }
+  if (!eraErr) {
+    console.error('FAIL: unknown era not rejected');
+    process.exit(1);
+  }
+  console.log(`era: ok (hunting は基準と別歴史・決定論・未知 era は拒否)`);
 }
 // brain アップロード経路: bytes → ブラウザ内 jco transpile → fuel 計装 → files 接続。
 // ビルトイン（ビルド時計装）と同一歴史になること

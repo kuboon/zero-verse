@@ -94,6 +94,7 @@ async function handle(cmd, args) {
       const world = engine.WebWorld.freeRun(
         BigInt(args.seed),
         Uint32Array.from(rows.map((r) => r.count | 0)),
+        args.era || undefined,
       );
       const cache = new Map();
       const runners = [];
