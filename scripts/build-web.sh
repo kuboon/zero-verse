@@ -25,7 +25,7 @@ wasm-bindgen --target web --out-dir pages/static/play/gen/engine --no-typescript
 #    ネイティブ実行できないため）。--instantiation sync で decide ごとの新規
 #    インスタンス化（テレパシー禁止）を呼び出し側から行えるようにする。
 cargo build --release -p zeroverse-meter
-for comp in brain-forager scenario-m1; do
+for comp in brain-forager brain-instinct scenario-m1; do
   out="pages/static/play/gen/$comp"
   rm -rf "$out"
   npx -y "@bytecodealliance/jco@$JCO_VERSION" transpile \
@@ -82,4 +82,4 @@ cp "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindg
    "$TDIR/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.core2.wasm" \
    pages/static/play/gen/jco/
 
-echo "built: pages/static/play/gen/{engine,brain-forager,scenario-m1,meter,jco}"
+echo "built: pages/static/play/gen/{engine,brain-forager,brain-instinct,scenario-m1,meter,jco}"

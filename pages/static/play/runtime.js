@@ -119,6 +119,34 @@ export async function loadComponentFromFiles(files, name) {
   return withFuel(mod, getCoreModule);
 }
 
+/**
+ * Instinct スクリプト brain のランナー。
+ * インタープリタ component（brain-instinct）の memory 先頭に
+ * [u32 LE script_len][script utf8] を注入して decide する。
+ * engine が保存する memory は状態だけなので、毎月ここで前置し直す
+ */
+export function makeInstinctRunner(component, scriptText) {
+  const script = new TextEncoder().encode(scriptText);
+  const base = makeBrainRunner(component);
+  return {
+    decide(snap, memory) {
+      const mem = memory instanceof Uint8Array ? memory : new Uint8Array(memory ?? []);
+      const wrapped = new Uint8Array(4 + script.length + mem.length);
+      new DataView(wrapped.buffer).setUint32(0, script.length, true);
+      wrapped.set(script, 4);
+      wrapped.set(mem, 4 + script.length);
+      const d = base.decide(snap, wrapped);
+      // 構文エラーはインタープリタが memory にマーカーとして返す（wasm の
+      // panic はメッセージが失われるため）。ここで例外に変換して表面化させる
+      if (d.memory && d.memory.length < 512) {
+        const text = new TextDecoder().decode(d.memory);
+        if (text.startsWith('instinct:parse:')) throw new Error(text);
+      }
+      return d;
+    },
+  };
+}
+
 // --- jco lift 表現の正規化（engine 側 serde が読める形へ） ---------------------
 
 function normalizeAct(a) {
@@ -200,8 +228,10 @@ export function makeBrainRunner(component) {
       try {
         const root = component.instantiate(imports);
         root.brainApi.decide(snap, memory);
-      } catch {
-        // トラップ = 部分実行。push 済みの宣言は有効
+      } catch (e) {
+        // トラップ = 部分実行。push 済みの宣言は有効。
+        // ただし Instinct の構文エラーはユーザに見せるべき失敗なので投げ直す
+        if (String(e).includes('instinct:parse:')) throw e;
       }
       if (component.fuel) {
         const left = component.fuel.value;

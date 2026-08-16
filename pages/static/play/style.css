@@ -140,3 +140,14 @@ h1 a:hover { color: var(--accent); }
 .brow input[type="number"] { width: 56px; }
 .brow button { padding: 2px 7px; }
 #scaleWrap input { width: 52px; }
+
+/* Instinct スクリプトエディタ */
+#instinctWrap { display: flex; flex-direction: column; gap: 6px; }
+#instinctWrap.hidden { display: none; }
+#instinctSrc {
+  width: 100%; resize: vertical; min-height: 180px;
+  background: #0e1014; color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 4;
+}
