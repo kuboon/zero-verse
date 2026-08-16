@@ -21,8 +21,35 @@ let groupNames = null; // 自由編成: グループ番号 → brain 名（役�
 // 自由編成の行（brain × 人数）
 const CUSTOM_BRAINS = [
   ['forager', 'forager（wasm）'],
+  ['instinct', '✍️ instinct（スクリプト）'],
   ['idle', 'idle'],
 ];
+
+// Instinct スクリプトエディタの雛形と保存（ブラウザに永続）
+const INSTINCT_STARTER = `#!instinct/1
+# はじめての brain: 学んで、食べて、たまに配る
+var kindness
+
+when !knows_food             do explore   # 何が食べ物かを実験で学ぶ
+when food < 10               do harvest   # 備蓄が薄ければ採取
+when health < 90 && food > 0 do eat       # お腹が減ったら食べる
+when month % 2 == 1          do discard   # 余り物を片付ける（穀倉死対策）
+when food > 6 && acq > 0     do give_food, set kindness = kindness + 1
+`;
+
+function instinctText() {
+  return $('instinctSrc').value;
+}
+
+/** Instinct の実行時エラー（構文エラー trap）をバナーに整形して出す */
+function showIfInstinctError(e) {
+  const m = String(e?.message ?? e).match(/instinct:parse:(\d+):([^\n"]*)/);
+  if (!m) return false;
+  running = false;
+  setControls({ loaded: true });
+  banner(`Instinct スクリプト ${m[1]} 行目: ${m[2]}`, 'err');
+  return true;
+}
 let brainRows = [{ brain: 'forager', count: 10 }];
 // アップロードされた brain（.wasm component）。key 'upload:<n>' → {name, bytes}。
 // ページを開いている間だけ保持する（リロードで消える）
@@ -107,7 +134,7 @@ let hitboxes = []; // {x, y, r, id}
 // worker URL のクエリに付き、worker はこの値を自分の配下資産（runtime.js /
 // engine / component）の URL にも伝搬させるので、ここを 1 つ上げれば
 // HTTP キャッシュ由来の新旧取り違え（旧 worker や旧 engine の混在）が全部防げる
-const PROTOCOL_VERSION = 8;
+const PROTOCOL_VERSION = 9;
 
 function newWorker() {
   if (worker) worker.terminate();
@@ -210,6 +237,7 @@ function syncScenarioControls() {
   $('brain').disabled = isExp || isCustom;
   $('brainLabel').classList.toggle('hidden', isCustom || isExp);
   $('brainRowsWrap').classList.toggle('hidden', !isCustom);
+  $('instinctWrap').classList.toggle('hidden', !isCustom);
   $('eraWrap').classList.toggle('hidden', !isCustom);
   $('scaleWrap').classList.toggle('hidden', !isExp);
   $('judge').textContent = isExp || isCustom ? '📊 集計' : '⚖ 判定';
@@ -242,6 +270,17 @@ async function init() {
   try {
     const seed = Math.max(0, Math.floor(Number($('seed').value) || 0));
     const scale = Math.max(1, Math.min(10, Number($('scale').value) | 0 || 1));
+    if (brainRows.some((r) => r.brain === 'instinct')) {
+      const head = instinctText()
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l !== '');
+      if (head !== '#!instinct/1') {
+        setMode('setup');
+        banner('Instinct スクリプトの 1 行目は #!instinct/1 にしてください', 'err');
+        return false;
+      }
+    }
     // アップロード brain のバイト列は行が参照しているものだけ渡す
     const uploads = {};
     for (const row of brainRows) {
@@ -260,11 +299,14 @@ async function init() {
         scale,
         era: $('era').value,
         comp: brainRows.map((row) => ({
-          brain: row.brain,
+          brain: row.brain === 'instinct' ? 'instinct:1' : row.brain,
           count: row.count,
-          label: uploadedBrains.get(row.brain)?.name,
+          label: row.brain === 'instinct' ? 'instinct' : uploadedBrains.get(row.brain)?.name,
         })),
         uploads,
+        scripts: brainRows.some((r) => r.brain === 'instinct')
+          ? { 'instinct:1': instinctText() }
+          : {},
       },
       60000,
     );
@@ -275,7 +317,7 @@ async function init() {
     return true;
   } catch (e) {
     setMode('setup');
-    banner(`ロード失敗: ${e.message}`, 'err');
+    if (!showIfInstinctError(e)) banner(`ロード失敗: ${e.message}`, 'err');
     return false;
   }
 }
@@ -301,7 +343,9 @@ function frame(t) {
       busy = true;
       rpc('step', { months: n }, 20000)
         .then((r) => applyState(r.state, r.series))
-        .catch(() => {})
+        .catch((e) => {
+          showIfInstinctError(e);
+        })
         .finally(() => {
           busy = false;
         });
@@ -316,8 +360,8 @@ async function stepOnce(months) {
   try {
     const r = await rpc('step', { months }, 20000);
     applyState(r.state, r.series);
-  } catch {
-    /* watchdog 済み */
+  } catch (e) {
+    showIfInstinctError(e); /* それ以外は watchdog 済み */
   } finally {
     busy = false;
   }
@@ -923,6 +967,11 @@ document.body.addEventListener('click', (e) => {
     draw();
     drawInspector();
   }
+});
+
+$('instinctSrc').value = localStorage.getItem('zv-instinct-draft') || INSTINCT_STARTER;
+$('instinctSrc').addEventListener('input', () => {
+  localStorage.setItem('zv-instinct-draft', $('instinctSrc').value);
 });
 
 $('speedLabel').textContent = `${SPEEDS[$('speed').value]} 月/秒`;

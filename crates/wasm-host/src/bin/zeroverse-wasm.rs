@@ -27,6 +27,34 @@ impl Brain for SharedBrain {
     }
 }
 
+/// Instinct スクリプト brain: インタープリタ component（brain-instinct）の
+/// memory 先頭に [u32 LE script_len][script] を注入して decide する。
+/// ビューワの makeInstinctRunner と同じ規約（engine が保存するのは状態だけ）
+struct InstinctBrain {
+    inner: SharedBrain,
+    script: Vec<u8>,
+}
+
+impl Brain for InstinctBrain {
+    fn decide(&mut self, snap: &Snapshot) -> Decision {
+        let mut s = snap.clone();
+        let mut mem = Vec::with_capacity(4 + self.script.len() + snap.memory.len());
+        mem.extend_from_slice(&(self.script.len() as u32).to_le_bytes());
+        mem.extend_from_slice(&self.script);
+        mem.extend_from_slice(&snap.memory);
+        s.memory = mem;
+        let mut d = self.inner.decide(&s);
+        // 構文エラーマーカー（ビューワの makeInstinctRunner と同じ規約）
+        if let Some(m) = &d.memory {
+            if m.starts_with(b"instinct:parse:") {
+                eprintln!("{}", String::from_utf8_lossy(m));
+                d.memory = None;
+            }
+        }
+        d
+    }
+}
+
 fn parse_flag(args: &[String], name: &str, default: u64) -> u64 {
     args.iter()
         .position(|a| a == name)
@@ -59,6 +87,20 @@ fn main() -> Result<()> {
     }
     if brain_paths.is_empty() {
         bail!("at least one --brain group=path required");
+    }
+    // --instinct group=script.txt: そのグループの brain（brain-instinct の
+    // インタープリタ component）にスクリプトを注入する
+    let mut instinct_scripts: BTreeMap<u32, Vec<u8>> = BTreeMap::new();
+    for (i, a) in args.iter().enumerate() {
+        if a == "--instinct" {
+            let spec = args
+                .get(i + 1)
+                .context("--instinct needs group=script.txt")?;
+            let (g, p) = spec
+                .split_once('=')
+                .context("--instinct format: group=script.txt")?;
+            instinct_scripts.insert(g.parse()?, std::fs::read(p)?);
+        }
     }
 
     let engine = make_engine()?;
@@ -95,7 +137,17 @@ fn main() -> Result<()> {
         let shared = group_brains
             .get(&hs.brain_group)
             .with_context(|| format!("no --brain for group {}", hs.brain_group))?;
-        brains.insert(ids[i], Box::new(SharedBrain(shared.clone())));
+        if let Some(script) = instinct_scripts.get(&hs.brain_group) {
+            brains.insert(
+                ids[i],
+                Box::new(InstinctBrain {
+                    inner: SharedBrain(shared.clone()),
+                    script: script.clone(),
+                }),
+            );
+        } else {
+            brains.insert(ids[i], Box::new(SharedBrain(shared.clone())));
+        }
     }
 
     let trace = args.iter().any(|a| a == "--trace");

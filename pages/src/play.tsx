@@ -94,6 +94,23 @@ function Play() {
               <span id="brainRows" class="brain-rows"></span>
               <button type="button" id="addBrainRow">＋追加</button>
             </div>
+            <div id="instinctWrap" class="hidden">
+              <div class="dim">
+                ✍️ Instinct スクリプト（brain の行で「instinct」を選ぶと
+                この内容で動きます。<a
+                  href={routes.docs.show.href({ slug: "instinct" })}
+                >
+                  言語リファレンス
+                </a>）
+              </div>
+              <textarea
+                id="instinctSrc"
+                rows={10}
+                spellcheck={false}
+                autocomplete="off"
+              >
+              </textarea>
+            </div>
             <label id="eraWrap" class="hidden">
               時代
               <select id="era">

@@ -10,4 +10,6 @@ wasm-tools component new guests/target/wasm32-unknown-unknown/release/brain_fora
   -o target/components/brain-forager.wasm
 wasm-tools component new guests/target/wasm32-unknown-unknown/release/scenario_m1.wasm \
   -o target/components/scenario-m1.wasm
-echo "built: target/components/{brain-forager,scenario-m1}.wasm"
+wasm-tools component new guests/target/wasm32-unknown-unknown/release/brain_instinct.wasm \
+  -o target/components/brain-instinct.wasm
+echo "built: target/components/{brain-forager,brain-instinct,scenario-m1}.wasm"

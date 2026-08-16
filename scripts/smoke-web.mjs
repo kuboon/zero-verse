@@ -11,6 +11,7 @@ import {
   loadComponentFromFiles,
   loadMeter,
   makeBrainRunner,
+  makeInstinctRunner,
   makeScenario,
   createRun,
 } from '../pages/static/play/runtime.js';
@@ -188,5 +189,52 @@ for (const kind of ['m1', 'm2', 'm2-otc', 'm3-open', 'm4', 'm4-clans-exo', 'm4-m
     process.exit(1);
   }
   console.log(`fuel: ok (decide あたり ~${sampled} 消費、予算 10 では trap して全額消費)`);
+}
+// Instinct（スクリプト brain）: 雛形スクリプトで 20 年生存 + 決定論 + 構文エラー trap
+{
+  const instinct = await loadComponent(new URL('brain-instinct/', gen), 'brain-instinct', fetchBytes);
+  const starter = `#!instinct/1
+var kindness
+when !knows_food             do explore
+when food < 10               do harvest
+when health < 90 && food > 0 do eat
+when month % 2 == 1          do discard
+when food > 6 && acq > 0     do give_food, set kindness = kindness + 1
+`;
+  const runHash = (script) => {
+    const w = engine.WebWorld.freeRun(21n, Uint32Array.from([5]));
+    const runner = makeInstinctRunner(instinct, script);
+    w.setDecider((id, snap, mem) => runner.decide(snap, mem));
+    w.step(20 * 12);
+    return { hash: w.state().stateHash, alive: w.alive() };
+  };
+  const a = runHash(starter);
+  const b = runHash(starter);
+  if (a.hash !== b.hash) {
+    console.error('FAIL: instinct not deterministic');
+    process.exit(1);
+  }
+  if (a.alive < 4) {
+    console.error(`FAIL: instinct starter does not survive (alive=${a.alive})`);
+    process.exit(1);
+  }
+  // 構文エラーは行番号つきの trap として表面化する
+  const bad = makeInstinctRunner(instinct, '#!instinct/1\nwhen oops > 0 do eat\n');
+  const w = engine.WebWorld.freeRun(21n, Uint32Array.from([1]));
+  let err = null;
+  w.setDecider((id, snap, mem) => {
+    try {
+      return bad.decide(snap, mem);
+    } catch (e) {
+      err = String(e);
+      return { acts: [], orders: [] };
+    }
+  });
+  w.step(1);
+  if (!err || !err.includes('instinct:parse:2:')) {
+    console.error(`FAIL: instinct parse error not surfaced (${err})`);
+    process.exit(1);
+  }
+  console.log(`instinct: ok (20年生存 ${a.alive}/5・決定論・構文エラーは行番号つき trap)`);
 }
 console.log('smoke ok');

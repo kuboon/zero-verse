@@ -7,7 +7,7 @@ summary: 自分の brain を書いて動かすまでの実践手順。ビルド�
 
 # brain 作者ガイド
 
-自分の brain（人間の意思決定アルゴリズム）を書いて zeroverse で動かすまでの実践手順。仕様の正典は [WIT パッケージ全体像](./wit.md) と [`wit/world.wit`](https://github.com/kuboon/zero-verse/blob/main/wit/world.wit)、世界のルールは「世界の仕様」の各章にある。ここでは動かすことに集中する。
+自分の brain（人間の意思決定アルゴリズム）を書いて zeroverse で動かすまでの実践手順。**コードを書かずに試したい場合は [Instinct](./instinct.md)**（ブラウザのエディタに書けるルール言語）から始めるのが最短です。本ガイドは wasm component を自作する人向け。仕様の正典は [WIT パッケージ全体像](./wit.md) と [`wit/world.wit`](https://github.com/kuboon/zero-verse/blob/main/wit/world.wit)、世界のルールは「世界の仕様」の各章にある。ここでは動かすことに集中する。
 
 ## brain とは何か
 

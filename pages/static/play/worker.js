@@ -30,9 +30,22 @@ const {
   loadComponentFromFiles,
   loadMeter,
   makeBrainRunner,
+  makeInstinctRunner,
   makeScenario,
   createRun,
 } = await import(V ? `./runtime.js?v=${V}` : './runtime.js');
+
+// Instinct（スクリプト brain）用のインタープリタ component。初回だけロード
+let instinctComponent = null;
+async function getInstinctComponent() {
+  instinctComponent ??= await loadComponent(
+    new URL('gen/brain-instinct/', import.meta.url),
+    'brain-instinct',
+    undefined,
+    V,
+  );
+  return instinctComponent;
+}
 
 // アップロードされた .wasm component をブラウザ内で jco transpile し、
 // fuel 計装（crates/meter）を入れて接続する。transpiler バンドル（約 9MB）は
@@ -104,7 +117,38 @@ async function handle(cmd, args) {
           continue;
         }
         if (!cache.has(row.brain)) {
-          if (row.brain.startsWith('upload:')) {
+          if (row.brain.startsWith('instinct:')) {
+            // スクリプト brain: インタープリタ component + ユーザスクリプト。
+            // 構文エラーは静的なので、ダミー snapshot への decide で今ここで検証する
+            //（実行中の decider 例外は wasm 境界でメッセージが失われるため）
+            const text = args.scripts?.[row.brain];
+            if (!text) throw new Error(`script missing: ${row.brain}`);
+            const runner = makeInstinctRunner(await getInstinctComponent(), text);
+            runner.decide(
+              {
+                now: 0,
+                rand: 0n,
+                selfView: {
+                  id: 0n,
+                  ageMonths: 0,
+                  sex: 0,
+                  stats: [],
+                  resources: [],
+                  spaceUsed: 0n,
+                  spaceFree: 0n,
+                  skills: [],
+                  availableActions: [],
+                  fuelBudget: 1000000n,
+                  memoryLimit: 4096,
+                },
+                acquaintances: [],
+                events: [],
+                market: [],
+              },
+              new Uint8Array(),
+            );
+            cache.set(row.brain, runner);
+          } else if (row.brain.startsWith('upload:')) {
             // アップロード brain: init 引数の uploads からバイト列を受け取り、
             // ブラウザ内で transpile して接続する
             const bytes = args.uploads?.[row.brain];
