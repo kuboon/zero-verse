@@ -25,9 +25,11 @@ export interface SkillView {
  * 
  * ## `"introduce"`
  * 
+ * ## `"mingle"`
+ * 
  * ## `"idle"`
  */
-export type ActionKind = 'invoke' | 'give' | 'discard' | 'teach' | 'learn' | 'introduce' | 'idle';
+export type ActionKind = 'invoke' | 'give' | 'discard' | 'teach' | 'learn' | 'introduce' | 'mingle' | 'idle';
 export interface SelfView {
   id: HumanId,
   ageMonths: number,
@@ -72,7 +74,7 @@ export interface InvokeResultInfo {
   produced: Array<ResourceStack>,
   healthGain: Qty,
 }
-export type Event = EventReceivedTransfer | EventTradeExecuted | EventTeachProgressed | EventSkillAcquired | EventIntroduced | EventEncountered | EventChildBorn | EventSomeoneDied | EventInvokeResult | EventActionFailed;
+export type Event = EventReceivedTransfer | EventTradeExecuted | EventTeachProgressed | EventSkillAcquired | EventIntroduced | EventEncountered | EventMingled | EventChildBorn | EventSomeoneDied | EventInvokeResult | EventActionFailed;
 export interface EventReceivedTransfer {
   tag: 'received-transfer',
   val: TransferInfo,
@@ -95,6 +97,10 @@ export interface EventIntroduced {
 }
 export interface EventEncountered {
   tag: 'encountered',
+  val: HumanId,
+}
+export interface EventMingled {
+  tag: 'mingled',
   val: HumanId,
 }
 export interface EventChildBorn {

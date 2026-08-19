@@ -12,7 +12,7 @@
 //! 式は i64。識別子: health(0-100) / food(学習済み食料の保有単位) /
 //! month / age(年) / acq(生存知人数) / knows_food(0/1) / rand(0..999) /
 //! 宣言済み var。演算: + - * / % 比較 && || ! ()（非 0 が真）。
-//! 動作: harvest / eat / explore / discard / give_food / set <var> = <式>。
+//! 動作: harvest / eat / explore / discard / give_food / mingle / set <var> = <式>。
 //! 適用不能な動作（食料未学習の eat など）は枠を消費せずスキップする。
 //!
 //! このモジュールは wit-bindgen に依存しない純粋ロジック（ネイティブでテスト可能）。
@@ -24,6 +24,7 @@ pub enum Action {
     Explore,
     Discard,
     GiveFood,
+    Mingle,
     Set(usize, Expr), // var index, 右辺
 }
 
@@ -210,6 +211,7 @@ fn parse_action(s: &str, vars: &[String], line: u32) -> Result<Action, ParseErro
         "explore" => return Ok(Action::Explore),
         "discard" => return Ok(Action::Discard),
         "give_food" => return Ok(Action::GiveFood),
+        "mingle" => return Ok(Action::Mingle),
         _ => {}
     }
     if let Some(rest) = s.strip_prefix("set ") {
@@ -225,7 +227,7 @@ fn parse_action(s: &str, vars: &[String], line: u32) -> Result<Action, ParseErro
     }
     Err(err(
         line,
-        "未知の動作です（harvest / eat / explore / discard / give_food / set）",
+        "未知の動作です（harvest / eat / explore / discard / give_food / mingle / set）",
     ))
 }
 

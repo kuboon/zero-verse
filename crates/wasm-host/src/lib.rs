@@ -85,6 +85,7 @@ impl commit::Host for HostState {
                 to: i.to,
                 subject: i.subject,
             },
+            action::Act::Mingle => CoreAct::Mingle,
         };
         self.commits.acts.push(act);
     }
@@ -240,6 +241,7 @@ impl WasmBrain {
                         stack: stack((*resource, *amount)),
                     }),
                     E::Encountered(id) => observation::Event::Encountered(*id),
+                    E::Mingled(id) => observation::Event::Mingled(*id),
                     E::SomeoneDied(id) => observation::Event::SomeoneDied(*id),
                     E::TradeExecuted {
                         counterparty,

@@ -27,7 +27,7 @@ decide(snapshot, memory) を呼ばれたら、
 - **決定論**: 同一シード → 同一歴史。乱数が欲しければ snapshot の `rand`（hash(seed, id, tick)）を使う。時刻・外部入力は存在しない
 - **思考コスト**: 消費 fuel が health 減少に換算される（`fuel-per-health`）。考えすぎると寿命が縮む。ブラウザ実行でも core wasm への命令数計装で計量され、**予算（health × fuel-per-health）を使い切ると decide はそこで打ち切られる**（それまでに push した act は有効 = 部分実行。無限ループを書いても月は進む）。計装のスケールはネイティブと近いが同一ではない
 
-何ができるか（act の種類、invoke / give / teach / learn / introduce / discard と standing order）は [wit.md](./wit.md) の分散マップから各章へ。
+何ができるか（act の種類、invoke / give / teach / learn / introduce / mingle / discard と standing order）は [wit.md](./wit.md) の分散マップから各章へ。
 
 ## 最小の brain（Rust）
 

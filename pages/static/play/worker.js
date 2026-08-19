@@ -67,6 +67,7 @@ const SCENARIOS = {
   'exp-m1': { type: 'experiment', kind: 'm1' },
   'exp-m2': { type: 'experiment', kind: 'm2' },
   'exp-m2-otc': { type: 'experiment', kind: 'm2-otc' },
+  'exp-m2-mingle': { type: 'experiment', kind: 'm2-mingle' },
   'exp-m3-open': { type: 'experiment', kind: 'm3-open' },
   'exp-m3-secret': { type: 'experiment', kind: 'm3-secret' },
   'exp-m4': { type: 'experiment', kind: 'm4' },

@@ -77,6 +77,7 @@ interface action {
     teach(teach-args),
     learn(learn-args),
     introduce(introduce-args),
+    mingle,                   // 出歩く。同月に mingle した者同士が決定論的にペアリングされる
     idle,
   }
 
@@ -110,7 +111,7 @@ interface action {
 interface observation {
   use types.{human-id, resource-id, skill-id, qty, month, resource-stack, sex, stat};
 
-  enum action-kind { invoke, give, discard, teach, learn, introduce, idle }
+  enum action-kind { invoke, give, discard, teach, learn, introduce, mingle, idle }
 
   record skill-view {
     skill: skill-id,
@@ -165,6 +166,7 @@ interface observation {
     skill-acquired(skill-id),
     introduced(introduction-info),
     encountered(human-id),          // ε 由来の偶発的出会い
+    mingled(human-id),              // mingle 由来の出会い（出歩いた者同士）
     child-born(human-id),           // 出産。母にのみ届く
     someone-died(human-id),         // 知人の死のみ通知
     invoke-result(invoke-result-info),

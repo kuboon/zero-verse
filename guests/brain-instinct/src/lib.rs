@@ -270,6 +270,11 @@ mod component {
                                 }
                             }
                         }
+                        Action::Mingle => {
+                            // 出歩く。同月に mingle した者同士がエンジン側でペアリングされる
+                            commit::push_act(&Act::Mingle);
+                            acts_used += 1;
+                        }
                         Action::Explore => {
                             // forager の実験を 1 手: (skill × 入力候補) を決定論で総当たり
                             let mut skills: Vec<u64> =
