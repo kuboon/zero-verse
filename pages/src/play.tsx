@@ -66,6 +66,9 @@ function Play() {
                   <option value="exp-m2-otc">
                     M2′: 板なし世界の商人（OTC）
                   </option>
+                  <option value="exp-m2-mingle">
+                    M2″: OTC + mingle（商圏の能動拡大）
+                  </option>
                   <option value="exp-m3-open">
                     M3: 教育の市場（公開教師）
                   </option>

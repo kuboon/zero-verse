@@ -22,7 +22,7 @@ export interface IntroduceArgs {
   to: HumanId,
   subject: HumanId,
 }
-export type Act = ActInvoke | ActGive | ActDiscard | ActTeach | ActLearn | ActIntroduce | ActIdle;
+export type Act = ActInvoke | ActGive | ActDiscard | ActTeach | ActLearn | ActIntroduce | ActMingle | ActIdle;
 export interface ActInvoke {
   tag: 'invoke',
   val: InvokeArgs,
@@ -46,6 +46,9 @@ export interface ActLearn {
 export interface ActIntroduce {
   tag: 'introduce',
   val: IntroduceArgs,
+}
+export interface ActMingle {
+  tag: 'mingle',
 }
 export interface ActIdle {
   tag: 'idle',

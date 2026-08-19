@@ -145,6 +145,7 @@ enum EventW {
     SkillAcquired(u64),
     Introduced(IntroductionInfoW),
     Encountered(u64),
+    Mingled(u64),
     ChildBorn(u64),
     SomeoneDied(u64),
     InvokeResult(InvokeResultInfoW),
@@ -250,6 +251,7 @@ fn wit_snapshot(snap: &Snapshot, fuel_budget: u64) -> SnapshotW {
                     stack: stack((*resource, *amount)),
                 }),
                 Event::Encountered(id) => EventW::Encountered(*id),
+                Event::Mingled(id) => EventW::Mingled(*id),
                 Event::SomeoneDied(id) => EventW::SomeoneDied(*id),
                 Event::TradeExecuted {
                     counterparty,
@@ -355,6 +357,7 @@ enum ActIn {
     Teach(TeachArgsIn),
     Learn(LearnArgsIn),
     Introduce(IntroduceArgsIn),
+    Mingle,
     Idle,
 }
 
@@ -437,6 +440,7 @@ fn to_core_decision(d: DecisionIn) -> Decision {
                 to: i.to,
                 subject: i.subject,
             },
+            ActIn::Mingle => Act::Mingle,
             ActIn::Idle => Act::Idle,
         })
         .collect();

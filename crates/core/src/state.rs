@@ -313,6 +313,10 @@ fn hash_event(f: &mut Fnv1a, ev: &Event) {
             f.write_u64(*via);
             f.write_u64(*subject);
         }
+        Event::Mingled(id) => {
+            f.write_u8(11);
+            f.write_u64(*id);
+        }
         Event::ActionFailed => f.write_u8(5),
     }
 }

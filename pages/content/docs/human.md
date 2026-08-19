@@ -129,7 +129,7 @@ human は world の有限な空間を占有する（[公理 11](./axioms.md)、[
 
 ## 知人（acquaintance）
 
-- 獲得経路は introduce（triadic closure）と、確率 ε の偶発的出会い（[公理 6](./axioms.md)）。
+- 獲得経路は 3 つ（[公理 6](./axioms.md)）：introduce（triadic closure。共通の知人が要る）、確率 ε の偶発的出会い（受動）、act `mingle`（出歩く。同月に出歩いた者同士が決定論的にペアリングされる能動経路。双方に `mingled` が届く）。分断されたネットワーク間に橋を架けられるのは ε と mingle だけ。
 - 知人について観測できるのは `apparent-age`（見かけの年齢。上記）、`apparent-sex`（見かけの性別。上記）、`alive`、`intimacy`（親密度。上記）、`last-interaction` のみ。**相手の resource と stats は直接観測不能**。豊かさすら行動からしか推定できない（apparent-age に漏れるのは stats の合成値一つ分だけ）。
 - relation-hint（world による関係の保証）は**廃止した**。world が human 間の関係を証明する仕組みは存在しない（[05-kinship.md](./kinship.md)）。
 - 知人リストの上限は未決（[90-open-questions.md](./open-questions.md) #2）。
@@ -179,6 +179,7 @@ interface observation {
     skill-acquired(skill-id),
     introduced(introduction-info),
     encountered(human-id),          // ε 由来の偶発的出会い
+    mingled(human-id),              // mingle 由来の出会い（出歩いた者同士）
     child-born(human-id),           // 出産。母にのみ届く → 05-kinship.md
     someone-died(human-id),         // 知人の死のみ通知
     action-failed(action-kind),     // 失敗理由は返さない
@@ -222,6 +223,7 @@ interface action {
     teach(teach-args),             // → 03-skills.md
     learn(learn-args),             // → 03-skills.md
     introduce(introduce-args),
+    mingle,                        // 出歩く。同月に mingle した者同士がペアに → 公理 6
     idle,
   }
 
@@ -247,7 +249,7 @@ conceive はアクションではない。親密度条件から自動発生す�
 
 - [x] `stat` / `stat-target` の確定：health / strength / cognition / fertility の 4 種で固定（上記）。曲線の具体式・train 系 skill の効果式・アクション枠の補正式は M1 で数値決定（stat-target 型はその後の train の skill 化で削除）。
 - [x] `apparent-age` の粒度と算出：実年齢と stats（vitality）から算出し年単位に量子化（上記）。β は world パラメータ化して既定 300‰（M4 で実装）。
-- [x] `action-kind` の確定：act 種別のみの enum（invoke / give / discard / teach / learn / introduce / idle）で確定（`wit/world.wit`）。
+- [x] `action-kind` の確定：act 種別のみの enum（invoke / give / discard / teach / learn / introduce / mingle / idle）で確定（`wit/world.wit`）。
 - [ ] health の自然減少率と食事 skill の回復量のバランス（緩衝付き餓死の速度）。M1 の消費と生存モデルで確定する。
 - [ ] fuel→health 写像の係数（重い思考が食事何回分に相当するか）。
 - [x] 性別：出生時に 1/2 で決定、本人のみ可視（上記）。妊娠・出産の health 低下は女性が負う。fertility 曲線の男女差を入れるかは M4 で決める。

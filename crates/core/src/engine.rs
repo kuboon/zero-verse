@@ -291,6 +291,7 @@ impl World {
             Vec::new();
         let mut teaches: Vec<(HumanId, HumanId, u64)> = Vec::new(); // (teacher, student, skill)
         let mut learns: Vec<(HumanId, HumanId, u64)> = Vec::new(); // (student, teacher, skill)
+        let mut minglers: Vec<HumanId> = Vec::new();
         let mut unilateral: Vec<(HumanId, Act)> = Vec::new();
         for &hid in &human_ids {
             let decision = decisions.remove(&hid).unwrap_or_default();
@@ -304,6 +305,12 @@ impl World {
                 match act {
                     Act::Teach { student, skill } => teaches.push((hid, student, skill)),
                     Act::Learn { teacher, skill } => learns.push((hid, teacher, skill)),
+                    // 重複宣言は 1 回ぶんに畳む（余分な宣言は act 枠を捨てるだけ）
+                    Act::Mingle => {
+                        if !minglers.contains(&hid) {
+                            minglers.push(hid);
+                        }
+                    }
                     other => unilateral.push((hid, other)),
                 }
             }
@@ -332,6 +339,8 @@ impl World {
         for (hid, act) in unilateral {
             self.apply_act(hid, act, month);
         }
+        // 4a'. mingle マッチング（出歩いた者同士の同席。公理 6 の ε の能動版）
+        self.resolve_mingle(month, minglers);
         // 4b. teach/learn 成立（同月ペアのみ進捗）
         let taught = self.resolve_teaching(teaches, learns);
         // 4c. conditional-give 判定（if-taught-me はここで月単位アトミックになる）
@@ -893,6 +902,30 @@ impl World {
     }
 
     /// act 1 件の適用。不正なら ActionFailed イベントだけ残して落とす（理由は返さない）。
+    /// mingle の解決: 今月 mingle を宣言した者を hash で並べ替えて隣接ペアリング。
+    /// 未知のペアだけが知人になり、双方に mingled が届く。既知のペア・余りの
+    /// 1 人は空振り（イベントも無し）。誰と会うかは選べない —「市に出れば
+    /// 誰かに会う」だけで、相手の選別は introduce（三項閉包）の側の仕事
+    fn resolve_mingle(&mut self, month: u32, minglers: Vec<HumanId>) {
+        if minglers.len() < 2 {
+            return;
+        }
+        let mut order: Vec<(u64, HumanId)> = minglers
+            .into_iter()
+            .map(|hid| (hash4(self.seed, 0x319, month as u64, hid), hid))
+            .collect();
+        order.sort_unstable();
+        for pair in order.chunks_exact(2) {
+            let (a, b) = (pair[0].1, pair[1].1);
+            if self.humans[&a].acquaintances.contains(&b) {
+                continue;
+            }
+            self.add_acquaintance(a, b);
+            self.push_event(a, Event::Mingled(b));
+            self.push_event(b, Event::Mingled(a));
+        }
+    }
+
     fn apply_act(&mut self, hid: HumanId, act: Act, month: u32) {
         match act {
             Act::Idle => {}
@@ -998,7 +1031,8 @@ impl World {
                 );
             }
             // teach/learn は resolve_teaching で対にして解決される（ここには来ない）
-            Act::Teach { .. } | Act::Learn { .. } => {}
+            // teach/learn/mingle は step 側で束ねて解決される（ここには来ない）
+            Act::Teach { .. } | Act::Learn { .. } | Act::Mingle => {}
         }
     }
 
@@ -1151,6 +1185,61 @@ mod tests {
             w.step(&mut brains);
             assert_eq!(before, w.composition_totals(), "month {}", w.month);
         }
+    }
+
+    /// mingle: 今月出歩いた者同士だけが決定論的にペアになり、単独の余り・
+    /// 非宣言者は空振り。続ければ宣言者は互いに全員知人になる
+    #[test]
+    fn mingle_pairs_only_declared_strangers() {
+        struct MingleBot;
+        impl Brain for MingleBot {
+            fn decide(&mut self, _snap: &Snapshot) -> Decision {
+                Decision {
+                    acts: vec![Act::Mingle],
+                    ..Default::default()
+                }
+            }
+        }
+        // ε 出会いを止めて mingle のマッチングだけを観測する
+        let params = WorldParams {
+            epsilon_permille: 0,
+            ..WorldParams::default()
+        };
+        let mut hashes = Vec::new();
+        for _ in 0..2 {
+            let mut w = World::new(9, 5, params.clone());
+            let ids: Vec<HumanId> = w.humans.keys().copied().collect();
+            let mut brains = idle_brains(&w);
+            for &hid in &ids[..3] {
+                brains.insert(hid, Box::new(MingleBot));
+            }
+            w.step(&mut brains);
+            // 宣言者 3 人のうちペアは 1 組だけ（次数計 2）。非宣言者は 0
+            let degs: Vec<usize> = ids
+                .iter()
+                .map(|&i| w.humans[&i].acquaintances.len())
+                .collect();
+            assert_eq!(degs[..3].iter().sum::<usize>(), 2, "{degs:?}");
+            assert_eq!(degs[3..].iter().sum::<usize>(), 0, "{degs:?}");
+            for &hid in &ids[..3] {
+                for a in &w.humans[&hid].acquaintances {
+                    assert!(ids[..3].contains(a), "宣言者以外と知人になった");
+                }
+            }
+            // 月をまたげばペアの組み合わせが変わり、やがて全員が互いに知人になる
+            for _ in 0..24 {
+                w.step(&mut brains);
+            }
+            for &x in &ids[..3] {
+                for &y in &ids[..3] {
+                    if x != y {
+                        assert!(w.humans[&x].acquaintances.contains(&y));
+                    }
+                }
+            }
+            hashes.push(w.state_hash());
+        }
+        assert_eq!(hashes[0], hashes[1], "mingle が決定論を破った");
     }
 
     /// 公理 11: 占有合計は総空間 S を超えない

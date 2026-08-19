@@ -3560,6 +3560,12 @@ let gen = (function* _initGenerator () {
       }
       case 6: {
         variant2= {
+          tag: 'mingle',
+        };
+        break;
+      }
+      case 7: {
+        variant2= {
           tag: 'idle',
         };
         break;
@@ -3814,8 +3820,12 @@ let gen = (function* _initGenerator () {
           enum10 = 5;
           break;
         }
-        case 'idle': {
+        case 'mingle': {
           enum10 = 6;
+          break;
+        }
+        case 'idle': {
+          enum10 = 7;
           break;
         }
         default: {
@@ -3912,21 +3922,27 @@ let gen = (function* _initGenerator () {
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
-        case 'child-born': {
+        case 'mingled': {
           const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 6, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
-        case 'someone-died': {
+        case 'child-born': {
           const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 7, true);
           dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
           break;
         }
-        case 'invoke-result': {
+        case 'someone-died': {
           const e = variant28.val;
           dataView(memory0).setInt8(base + 0, 8, true);
+          dataView(memory0).setBigInt64(base + 8, toUint64(e), true);
+          break;
+        }
+        case 'invoke-result': {
+          const e = variant28.val;
+          dataView(memory0).setInt8(base + 0, 9, true);
           var {skill: v22_0, consumed: v22_1, produced: v22_2, healthGain: v22_3 } = e;
           dataView(memory0).setBigInt64(base + 8, toUint64(v22_0), true);
           var vec24 = v22_1;
@@ -3956,7 +3972,7 @@ let gen = (function* _initGenerator () {
         }
         case 'action-failed': {
           const e = variant28.val;
-          dataView(memory0).setInt8(base + 0, 9, true);
+          dataView(memory0).setInt8(base + 0, 10, true);
           var val27 = e;
           let enum27;
           switch (val27) {
@@ -3984,8 +4000,12 @@ let gen = (function* _initGenerator () {
               enum27 = 5;
               break;
             }
-            case 'idle': {
+            case 'mingle': {
               enum27 = 6;
+              break;
+            }
+            case 'idle': {
+              enum27 = 7;
               break;
             }
             default: {
@@ -4170,7 +4190,7 @@ let gen = (function* _initGenerator () {
         elemAlign32: 8,
         elemSize32: 8,
         typedArray: BigUint64Array,
-      }), 8, 4],], size32: 16, align32: 4 }), 16, 4, 4],['give', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['stack', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8],], size32: 24, align32: 8 }), 24, 8, 3],['discard', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['teach', _liftFlatRecord({ fieldMetas: [['student', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['learn', _liftFlatRecord({ fieldMetas: [['teacher', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['introduce', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['subject', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['idle', null, 0, 0, 0],],
+      }), 8, 4],], size32: 16, align32: 4 }), 16, 4, 4],['give', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['stack', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8],], size32: 24, align32: 8 }), 24, 8, 3],['discard', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['teach', _liftFlatRecord({ fieldMetas: [['student', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['learn', _liftFlatRecord({ fieldMetas: [['teacher', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['introduce', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['subject', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['mingle', null, 0, 0, 0],['idle', null, 0, 0, 0],],
       variantSize32: 32,
       variantAlign32: 8,
       variantPayloadOffset32: 8,
@@ -4206,7 +4226,7 @@ let gen = (function* _initGenerator () {
         elemAlign32: 8,
         elemSize32: 8,
         typedArray: BigUint64Array,
-      }), 8, 4],], size32: 16, align32: 4 }), 16, 4, 4],['give', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['stack', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8],], size32: 24, align32: 8 }), 24, 8, 3],['discard', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['teach', _liftFlatRecord({ fieldMetas: [['student', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['learn', _liftFlatRecord({ fieldMetas: [['teacher', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['introduce', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['subject', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['idle', null, 0, 0, 0],],
+      }), 8, 4],], size32: 16, align32: 4 }), 16, 4, 4],['give', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['stack', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8],], size32: 24, align32: 8 }), 24, 8, 3],['discard', _liftFlatRecord({ fieldMetas: [['resource', _liftFlatU64, 8, 8],['amount', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['teach', _liftFlatRecord({ fieldMetas: [['student', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['learn', _liftFlatRecord({ fieldMetas: [['teacher', _liftFlatU64, 8, 8],['skill', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['introduce', _liftFlatRecord({ fieldMetas: [['to', _liftFlatU64, 8, 8],['subject', _liftFlatU64, 8, 8],], size32: 16, align32: 8 }), 16, 8, 2],['mingle', null, 0, 0, 0],['idle', null, 0, 0, 0],],
       variantSize32: 32,
       variantAlign32: 8,
       variantPayloadOffset32: 8,

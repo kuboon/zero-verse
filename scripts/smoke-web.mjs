@@ -77,7 +77,7 @@ if (!verdict.cleared) {
 }
 
 // 実験再現ラン（WebExperiment）: 集計が出ること + 決定論
-for (const kind of ['m1', 'm2', 'm2-otc', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
+for (const kind of ['m1', 'm2', 'm2-otc', 'm2-mingle', 'm3-open', 'm4', 'm4-clans-exo', 'm4-marriage']) {
   const a = new engine.WebExperiment(kind, 7n, 1);
   a.step(10 * 12);
   const lines = a.summary();
@@ -217,6 +217,31 @@ when food > 6 && acq > 0     do give_food, set kindness = kindness + 1
   if (a.alive < 4) {
     console.error(`FAIL: instinct starter does not survive (alive=${a.alive})`);
     process.exit(1);
+  }
+  // mingle: スクリプトで宣言した者同士だけが知人になる（5 人全員が毎偶数月 mingle）
+  {
+    const social = '#!instinct/1\nwhen !knows_food do explore\nwhen food < 10 do harvest\nwhen health < 90 && food > 0 do eat\nwhen month % 2 == 0 do mingle\n';
+    const w = engine.WebWorld.freeRun(21n, Uint32Array.from([5]));
+    const runner = makeInstinctRunner(instinct, social);
+    w.setDecider((id, snap, mem) => runner.decide(snap, mem));
+    w.step(24);
+    const rep = w.report();
+    if (rep.groups.length !== 1) {
+      console.error('FAIL: mingle freeRun report');
+      process.exit(1);
+    }
+    if (w.alive() !== 5) {
+      console.error(`FAIL: mingle script world died (alive=${w.alive()})`);
+      process.exit(1);
+    }
+    // 自由編成の初期知人はリング（各 2 人）。mingle で知人グラフが育つ
+    //（5 人の完全グラフは各 4 人 = 総和 20。ε の寄与は 24 ヶ月では僅少）
+    const totalDeg = w.state().humans.reduce((a, h) => a + h.acquaintances.length, 0);
+    if (totalDeg < 16) {
+      console.error(`FAIL: mingle did not grow the graph (total degree ${totalDeg})`);
+      process.exit(1);
+    }
+    console.log(`instinct mingle: ok (2 年で知人次数 計 ${totalDeg}/20)`);
   }
   // 構文エラーは行番号つきの trap として表面化する
   const bad = makeInstinctRunner(instinct, '#!instinct/1\nwhen oops > 0 do eat\n');

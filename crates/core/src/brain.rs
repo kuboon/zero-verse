@@ -42,6 +42,9 @@ pub enum Event {
     SkillAcquired(SkillId),
     /// via に subject を紹介された（introduce の受け手・被紹介者の双方に届く）
     Introduced { via: HumanId, subject: HumanId },
+    /// mingle（出歩く）で新しい知人と引き合わされた（双方に届く。
+    /// 相手が既知だった月・相手がいなかった月は何も起きない = イベントも無い）
+    Mingled(HumanId),
     /// 出産。**母にのみ届く**。父には 0 歳の知人が現れるだけ（pages/content/docs/kinship.md）
     ChildBorn(HumanId),
     /// 失敗理由は返さない
@@ -152,6 +155,10 @@ pub enum Act {
         to: HumanId,
         subject: HumanId,
     },
+    /// 出歩く。同じ月に mingle を宣言した者同士が決定論的にペアリングされ、
+    /// 相手が未知なら知人になる（知人獲得の能動経路。ε の意思版
+    /// → pages/content/docs/communication.md）
+    Mingle,
     Idle,
 }
 

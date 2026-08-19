@@ -416,6 +416,9 @@ impl Brain for MarketBrain {
 //   最良 λ の資源へ集中する（メンガー。板の厚み feedback の代替）
 // ---------------------------------------------------------------------------
 
+/// M2″ の mingle 目標次数: 生存知人がこれ未満の間だけ市に出る
+const MINGLE_TARGET_DEGREE: usize = 8;
+
 /// M2′ の OTC 商人 brain。板を一切参照しない
 pub struct OtcBrain {
     pub edible: ResourceId,
@@ -432,6 +435,8 @@ pub struct OtcBrain {
     /// 食料をくれたことのある知人（信頼された供給者）
     suppliers: Vec<HumanId>,
     probe_cursor: usize,
+    /// M2″: 知人が少ない・在庫が捌けない月に mingle（出歩く）で商圏を広げる
+    mingle_enabled: bool,
 }
 
 impl OtcBrain {
@@ -450,7 +455,14 @@ impl OtcBrain {
             received_counts: Vec::new(),
             suppliers: Vec::new(),
             probe_cursor: 0,
+            mingle_enabled: false,
         }
+    }
+
+    /// M2″ 用: mingle による商圏拡大を有効にする
+    pub fn with_mingle(mut self) -> Self {
+        self.mingle_enabled = true;
+        self
     }
 }
 
@@ -518,16 +530,17 @@ impl Brain for OtcBrain {
         self.suppliers
             .retain(|s| snap.acquaintances.iter().any(|v| v.id == *s && v.alive));
 
+        let alive_acq: Vec<HumanId> = snap
+            .acquaintances
+            .iter()
+            .filter(|v| v.alive)
+            .map(|v| v.id)
+            .collect();
+
         // 買い手: 供給者（いなければ生存知人を輪番で探査）へロットぶん先払いする。
         // 相手の常設 cond-give が同月内に発火して食料が返る
         let lot = 2 * QTY_SCALE;
         if let Some(pay) = pay_with {
-            let alive_acq: Vec<HumanId> = snap
-                .acquaintances
-                .iter()
-                .filter(|v| v.alive)
-                .map(|v| v.id)
-                .collect();
             if held(snap, pay) >= lot && !alive_acq.is_empty() {
                 let to = if self.suppliers.is_empty() {
                     let id = alive_acq[self.probe_cursor % alive_acq.len()];
@@ -549,6 +562,15 @@ impl Brain for OtcBrain {
         let mut keep = vec![self.edible, self.specialty];
         if let Some(p) = pay_with {
             keep.push(p);
+        }
+        // M2″: 商圏の拡大。生存知人が目標に満たない偶数月は、採取を 1 回休んで
+        // 市に出る（mingle）。片付け枠は奪わない（廃棄物を溜めると占有維持費で
+        // 死ぬ）。目標に達したら通常営業に戻る
+        let mingle_now = self.mingle_enabled
+            && alive_acq.len() < MINGLE_TARGET_DEGREE
+            && snap.now.is_multiple_of(2);
+        if mingle_now {
+            acts[0] = Act::Mingle;
         }
         acts.extend(discard_junk(snap, &keep, 1));
 
@@ -591,6 +613,15 @@ impl Brain for OtcBrain {
 
 /// M2′ 実験世界: M2 と同一の賦存 + リング知人（±1, ±2）。板は無効
 pub fn build_m2_otc(seed: u64, n_humans: usize, params: WorldParams) -> M2Setup {
+    build_m2_otc_inner(seed, n_humans, params, false)
+}
+
+/// M2″ 実験世界: M2′ と同一。ただし商人が mingle で商圏を広げる
+pub fn build_m2_mingle(seed: u64, n_humans: usize, params: WorldParams) -> M2Setup {
+    build_m2_otc_inner(seed, n_humans, params, true)
+}
+
+fn build_m2_otc_inner(seed: u64, n_humans: usize, params: WorldParams, mingle: bool) -> M2Setup {
     let params = WorldParams {
         board_enabled: false,
         ..params
@@ -610,15 +641,16 @@ pub fn build_m2_otc(seed: u64, n_humans: usize, params: WorldParams) -> M2Setup 
         }
         let rid = |p: usize| world.laws.id_of_index[p];
         let sid = |s: usize| world.laws.skill_id_of_index[s];
-        brains.insert(
-            hid,
-            Box::new(OtcBrain::new(
-                rid(edible),
-                rid(specialty),
-                sid(N_PRIMARY + edible),
-                sid(specialty),
-            )),
+        let mut brain = OtcBrain::new(
+            rid(edible),
+            rid(specialty),
+            sid(N_PRIMARY + edible),
+            sid(specialty),
         );
+        if mingle {
+            brain = brain.with_mingle();
+        }
+        brains.insert(hid, Box::new(brain));
     }
 
     M2Setup { world, brains }
@@ -668,6 +700,33 @@ pub fn run_m2_otc(seed: u64, years: u32, params: WorldParams) -> M2Result {
     let months = years * setup.world.params.months_per_year;
     setup.world.run(months, &mut setup.brains);
     m2_otc_result(&setup.world)
+}
+
+/// M2″ 実験: mingle（商圏の能動拡大）で OTC の貨幣収束は板に近づくか
+pub fn run_m2_mingle(seed: u64, years: u32, params: WorldParams) -> M2Result {
+    let mut setup = build_m2_mingle(seed, 20, params);
+    let months = years * setup.world.params.months_per_year;
+    setup.world.run(months, &mut setup.brains);
+    m2_otc_result(&setup.world)
+}
+
+/// 生存者の「生存知人数」の平均（×1000。知人グラフの密度の観測用）
+pub fn mean_alive_degree_permille(world: &World) -> u64 {
+    let n = world.humans.len() as u64;
+    if n == 0 {
+        return 0;
+    }
+    let total: u64 = world
+        .humans
+        .values()
+        .map(|h| {
+            h.acquaintances
+                .iter()
+                .filter(|a| world.humans.contains_key(a))
+                .count() as u64
+        })
+        .sum();
+    total * 1000 / n
 }
 
 pub struct M2Setup {
@@ -1569,8 +1628,14 @@ impl Brain for CourtingBrain {
                 slot4 = Some(Act::Introduce { to: child, subject });
             }
         }
+        // 縁故 0 の自力打開: 独身で適格な相手が知人に一人もいないなら、
+        // 偶数月は市に出て（mingle）新しい出会いを探す。従来この状態は
+        // 打つ手なし（ε 待ち）で、コホートの性比が偏ると詰んでいた
+        let lonely = my_sign != 0 && self.partner.is_none() && gift_to.is_none();
         if let Some(act) = slot4 {
             acts.push(act);
+        } else if lonely && snap.now.is_multiple_of(2) {
+            acts.push(Act::Mingle);
         } else if minors.is_empty() || snap.now.is_multiple_of(2) {
             acts.extend(discard_junk(snap, &[self.edible], 1));
         } else {
@@ -2331,6 +2396,7 @@ enum SessionKind {
     },
     M2,
     M2Otc,
+    M2Mingle,
     M3 {
         apprentice_ids: Vec<HumanId>,
         skill_idx: usize,
@@ -2367,8 +2433,8 @@ pub struct ExperimentSession {
 }
 
 impl ExperimentSession {
-    /// kind: "m1" | "m2" | "m3-open" | "m3-secret" | "m4" |
-    ///       "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
+    /// kind: "m1" | "m2" | "m2-otc" | "m2-mingle" | "m3-open" | "m3-secret" |
+    ///       "m4" | "m4-clans-endo" | "m4-clans-exo" | "m4-marriage"
     /// パラメータは CLI の各サブコマンドと同一（M3 は re_permille=20）。
     /// scale はコホートの倍率（1 = CLI と同一。人数を増やした観測用）。
     /// 環境（土地）も scale 倍する: 人だけ増やすと環境容量を最初から超過し、
@@ -2413,6 +2479,16 @@ impl ExperimentSession {
                     world: s.world,
                     brains: s.brains,
                     kind: SessionKind::M2Otc,
+                    roles,
+                }
+            }
+            "m2-mingle" => {
+                let s = build_m2_mingle(seed, 20 * scale, params);
+                let roles = s.world.humans.keys().map(|&id| (id, "商人")).collect();
+                ExperimentSession {
+                    world: s.world,
+                    brains: s.brains,
+                    kind: SessionKind::M2Mingle,
                     roles,
                 }
             }
@@ -2509,7 +2585,8 @@ impl ExperimentSession {
                     ("消費比（合格基準 > 1.0）".into(), format!("{:.3}", r.ratio)),
                 ]
             }
-            SessionKind::M2Otc => {
+            SessionKind::M2Otc | SessionKind::M2Mingle => {
+                let mingle = matches!(self.kind, SessionKind::M2Mingle);
                 let r = m2_otc_result(w);
                 let pays: u64 = (0..crate::laws::N_RESOURCES)
                     .map(|i| {
@@ -2517,6 +2594,7 @@ impl ExperimentSession {
                             - w.cond_give_volume.get(&i).copied().unwrap_or(0)
                     })
                     .sum();
+                let deg = mean_alive_degree_permille(w);
                 vec![
                     (
                         "媒介 resource（内部 #）".into(),
@@ -2532,7 +2610,11 @@ impl ExperimentSession {
                     ),
                     (
                         "媒介の支払い集中度".into(),
-                        format!("{}‰（板なし OTC）", r.top_share),
+                        format!(
+                            "{}‰（板なし OTC{}）",
+                            r.top_share,
+                            if mingle { " + mingle" } else { "" }
+                        ),
                     ),
                     (
                         "媒介の劣化率 λ".into(),
@@ -2542,6 +2624,10 @@ impl ExperimentSession {
                         ),
                     ),
                     ("支払い（先払い give）件数".into(), pays.to_string()),
+                    (
+                        "知人グラフ平均次数".into(),
+                        format!("{}.{}", deg / 1000, (deg % 1000) / 100),
+                    ),
                 ]
             }
             SessionKind::M2 => {
@@ -2757,6 +2843,38 @@ mod tests {
                 r.involvement
             );
         }
+    }
+
+    /// M2″: mingle（商圏の能動拡大）は OTC の貨幣収束を平均で押し上げる。
+    /// 出生による人口ノイズを分離するため不妊化した世界で比較する
+    ///（出生ありの世界では、支払い give が親密度を薄く広く配って出生自体を
+    /// 抑制する交絡がある → pages/content/docs/market.md M2″ 節）
+    #[test]
+    fn mingle_widens_otc_convergence() {
+        let sterile = WorldParams {
+            puberty_months: 100_000,
+            ..WorldParams::default()
+        };
+        let mut share_otc = 0u64;
+        let mut share_mingle = 0u64;
+        for seed in 1..=5 {
+            let a = run_m2_otc(seed, 20, sterile.clone());
+            let b = run_m2_mingle(seed, 20, sterile.clone());
+            share_otc += a.top_share;
+            share_mingle += b.top_share;
+            // mingle 版は退化シード（孤立から抜けられず非最良 λ に固着する
+            // seed 5 のような世界）でも最良 λ の媒介に収束する
+            assert_eq!(
+                b.top_lambda_rank, 0,
+                "seed {seed}: mingle 版の媒介が最良 λ でない: {:?}",
+                b.involvement
+            );
+        }
+        // 実測（20 年 × 5 シード計）: otc 1948‰ / mingle 2769‰。余裕をみて +400
+        assert!(
+            share_mingle > share_otc + 400,
+            "mingle が OTC の収束を押し上げていない: otc 計 {share_otc}‰ vs mingle 計 {share_mingle}‰"
+        );
     }
 
     /// M2 合格基準: 取引が特定の一つの resource を経由する間接交換に集中し（貨幣の創発）、
